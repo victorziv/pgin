@@ -1,0 +1,45 @@
+*logs/
+*run/
+*backup/
+trackivt/webapp/static/tasklog/
+.pytest_cache/
+
+#### Python
+*.py[co]
+venv*
+
+# Packages
+*.egg
+*.egg-info
+dist
+sa-utils
+build
+eggs
+.eggs
+parts
+develop-eggs
+.installed.cfg
+
+# Installer logs
+pip-log.txt
+
+# Unit test / coverage reports
+.coverage
+.tox
+
+#### Eclipse
+*.pydevproject
+.project
+.metadata
+
+#### Emacs / Vi / Other editors
+*.swp
+*.swo
+.env
+.cache
+.DS
+
+# generated docs
+doc/static/
+doc/_modules/
+doc/_sources/
