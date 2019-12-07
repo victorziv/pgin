@@ -11,7 +11,7 @@ class Migration:
 
     def __init__(self, home=None):
         if home is None:
-            home = os.path.join(ROOTDIR, PROJECT, 'dbmigration')
+            home = os.path.join(ROOTDIR, 'dbmigration')
         self.home = home
         self.config = {}
         self.verbose = False
@@ -23,7 +23,19 @@ class Migration:
             click.echo("    config[%s] = %s" % (key, value), file=sys.stdr)
     # _______________________
 
+    def create_directory(self, path):
+        try:
+            os.makedirs(path)
+        except OSError as e:
+            if e.errno != 17:
+                raise
+    # ____________________________
+
     def init(self):
+        click.echo("Home: %r" % self.home)
+        self.create_directory(self.home)
+        for d in ['deploy', 'revert']:
+            self.create_directory(os.path.join(self.home, d))
     # _______________________
 
     def __repr__(self):
@@ -76,3 +88,14 @@ def init(migration, project, uri):
     """
 
     click.echo('Initiating migrations for project %s' % (project))
+# ================================
+
+
+def main():
+    m = Migration()
+    m.init()
+# _________________________
+
+
+if __name__ == '__main__':
+    main()
