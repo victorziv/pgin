@@ -4,7 +4,7 @@ from shutil import rmtree
 from setuptools import setup, find_packages, Command
 from setuptools.command.test import test as TestCommand
 
-APP = 'hwinfoclient'
+APP = 'postmig'
 here = os.path.abspath(os.path.dirname(__file__))
 # ===========================================
 
@@ -144,6 +144,8 @@ setup(
     long_description_content_type="text/x-rst",
     install_requires=[
         'requests',
+        'psycopg2-binary',
+        'click'
     ],
     include_package_data=True,
     python_requires='>=3.6',
@@ -154,5 +156,10 @@ setup(
         'publish': UploadCommand,
         'tags': TagsCommand,
         'test': PyTest,
-    }
+    },
+    py_modules=['pmig'],
+    entry_points='''
+        [console_scripts]
+        pmig=pmig:cli
+    ''',
 )

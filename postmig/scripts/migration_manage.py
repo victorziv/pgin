@@ -23,6 +23,9 @@ class Migration:
             click.echo("    config[%s] = %s" % (key, value), file=sys.stdr)
     # _______________________
 
+    def init(self):
+    # _______________________
+
     def __repr__(self):
         return "Migration directory: %r" % self.home
 

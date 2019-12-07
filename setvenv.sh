@@ -8,7 +8,7 @@ VENVDIR="$ROOTDIR/venv${APP}"
 install_modules() {
     cd ${ROOTDIR}
     source ${VENVDIR}/bin/activate
-    cp "${ROOTDIR}/scripts/pip.conf" "${VENVDIR}/"
+    cp "${ROOTDIR}/pip.conf" "${VENVDIR}/"
     pip install -r ${ROOTDIR}/requirements.txt
     deactivate
 }
@@ -21,7 +21,7 @@ set_environment() {
 
 main() {
     rm -rf $VENVDIR
-    virtualenv --python $(which python3.6) --no-site-packages --clear --verbose $VENVDIR
+    virtualenv --python $(which python3.7) --no-site-packages --clear --verbose $VENVDIR
     set_environment
     install_modules
 }
