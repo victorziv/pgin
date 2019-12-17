@@ -8,6 +8,7 @@ logger = None
 conf = None
 # ==============================================
 
+
 def get_version(directory):
     with open(os.path.join(directory, 'VERSION')) as fp:
         version = fp.read()
@@ -18,6 +19,7 @@ def get_version(directory):
 
 class Config:
     PROJECT = 'postmig'
+    PROJECT_USER = 'ivtapp'
 
     PROJECTDIR = os.path.abspath(os.path.dirname(__file__))
     ROOTDIR = os.path.dirname(PROJECTDIR)
@@ -26,6 +28,7 @@ class Config:
 
     VERSION = get_version(PROJECTDIR)
 
+    DBNAME = 'tarzan'
     DBHOST = 'localhost'
     DBPORT = 5432
     DBUSER = PROJECT_USER
@@ -42,6 +45,11 @@ class Config:
     DBNAME_ADMIN = 'postgres'
     DB_CONN_URI_ADMIN = DB_URI_FORMAT.format(
         dbname=DBNAME_ADMIN,
+        **DB_CONNECTION_PARAMS
+    )
+
+    DB_CONN_URI = DB_URI_FORMAT.format(
+        dbname=DBNAME,
         **DB_CONNECTION_PARAMS
     )
     # _____________________________
@@ -67,82 +75,6 @@ class Config:
 # ===================================
 
 
-class DevelopmentConfig(Config):
-    SERVER_NAME = 'localhost:7000'
-    ENV = 'develop'
-    DEBUG = figure_debug_mode('develop')
-    DBNAME = "%s%s" % (Config.PROJECT, ENV)
-    DB_CONN_URI = Config.DB_URI_FORMAT.format(
-        dbname=DBNAME,
-        **Config.DB_CONNECTION_PARAMS
-    )
-    MAIL_SERVER = 'smtp-dev.lab.il.infinidat.com'
-    MAIL_PORT = 25
-    MAIL_USE_TLS = False
-    MAIL_USERNAME = None
-    MAIL_PASSWORD = None
-    ELASTICSEARCH_URI = 'http://localhost:9200'
-# ===================================
-
-
-class TestingConfig(Config):
-    SERVER_NAME = 'localhost.localdomain:7000'
-    LOGSERVER = 'localhost'
-    LOGSERVER_HTTP = LOGSERVER
-    ENV = 'testing'
-    DEBUG = figure_debug_mode(ENV)
-    DBNAME = "%s%s" % (Config.PROJECT, ENV)
-    DB_CONN_URI = Config.DB_URI_FORMAT.format(
-        dbname=DBNAME,
-        **Config.DB_CONNECTION_PARAMS
-    )
-# ===================================
-
-
-class ProductionConfig(Config):
-    SERVER_NAME = 'hwinfosrv.lab.il.infinidat.com'
-    DBNAME = Config.PROJECT
-    DB_CONN_URI = Config.DB_URI_FORMAT.format(
-        dbname=DBNAME,
-        **Config.DB_CONNECTION_PARAMS
-    )
-    TASK_MNG_PORT = 29955
-    TASK_SINK_PORT = 29956
-    TASK_EXECUTOR_PORT = 29957
-    TASK_LOG_PORT = 29958
-
-    IVT_TEAM_MAIL_RECIPIENT = 'ivt.team@infinidat.com'
-    HWINFRA_TEAM_MAIL_RECIPIENT = 'hardware.infra@infinidat.com'
-
-# ===================================
-
-
-class StagingConfig(Config):
-    SERVER_NAME = 'hwinfo-staging.lab.il.infinidat.com'
-    DBNAME = Config.PROJECT
-    DB_CONN_URI = Config.DB_URI_FORMAT.format(
-        dbname=DBNAME,
-        **Config.DB_CONNECTION_PARAMS
-    )
-
-    TASK_MNG_PORT = 27755
-    TASK_SINK_PORT = 27756
-    TASK_EXECUTOR_PORT = 27757
-    TASK_LOG_PORT = 27758
-
-# ===================================
-
-
-cnf = {
-    'develop': DevelopmentConfig,
-    'testing': TestingConfig,
-    'production': ProductionConfig,
-    'staging': StagingConfig,
-    'default': DevelopmentConfig
-}
-# ===================================
-
-
 class ConfiguratorDict(dict):
 
     def from_cls(self, cls):
@@ -159,37 +91,11 @@ class ConfiguratorDict(dict):
 class Configurator:
 
     @classmethod
-    def configure(cls, configkey='default'):
-        config_name = os.getenv('%s_CONFIG' % Config.PROJECT) or configkey
-        cnfcls = cnf[config_name]
+    def configure(cls):
         global conf
         conf = ConfiguratorDict()
-        conf.from_cls(cnfcls)
+        conf.from_cls(Config)
         return conf
-    # _________________________________
-
-    @staticmethod
-    def create_email_handler():
-        auth = None
-        if Config.MAIL_USERNAME or Config.MAIL_PASSWORD:
-            auth = (Config.MAIL_USERNAME, Config.MAIL_PASSWORD)
-
-        secure = None
-
-        if Config.MAIL_USE_TLS:
-            secure = ()
-
-        mail_handler = SMTPHandler(
-            mailhost=(Config.MAIL_SERVER, Config.MAIL_PORT),
-            fromaddr=Config.MAIL_SENDER,
-            toaddrs=Config.ADMINS,
-            subject='%s Failure' % Config.PROJECT,
-            credentials=auth,
-            secure=secure
-        )
-
-        mail_handler.setLevel(logging.ERROR)
-        return mail_handler
     # _________________________________
 
     @classmethod
