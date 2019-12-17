@@ -70,6 +70,7 @@ def init(migration):
         create_directory(os.path.join(migration.home, d))
     dba.createdb(newdb=conf['DBNAME'], newdb_owner=conf['PROJECT_USER'])
     dba.create_meta_schema()
+    dba.create_changes_table()
 # _____________________________________________
 
 

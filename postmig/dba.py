@@ -111,12 +111,14 @@ class DBAdmin:
             params = [AsIs(self.meta_schema)]
             cursor.execute(query, params)
             conn.commit()
+        except psycopg2.errors.DuplicateSchema:
+            pass
         finally:
             cursor.close()
             conn.close()
     # ___________________________________________
 
-    def create_table_changelog(self):
+    def create_changes_table(self):
 
         self.logger.info("DB_CONN_URI: {}".format(self.conf['DB_CONN_URI']))
 
@@ -124,15 +126,13 @@ class DBAdmin:
             conn, cursor = self.connectdb(self.conf['DB_CONN_URI'])
 
             query = """
-               CREATE TABLE IF NOT EXISTS changelog (
-                   id serial PRIMARY KEY,
-                   version VARCHAR(32),
+               CREATE TABLE IF NOT EXISTS %s.changes (
+                   changeid CHAR(128) PRIMARY KEY,
                    name VARCHAR(100) UNIQUE,
                    applied TIMESTAMP
                );
             """
-            params = {}
-
+            params = [AsIs(self.meta_schema)]
             cursor.execute(query, params)
             conn.commit()
         finally:
