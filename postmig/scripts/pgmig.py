@@ -70,14 +70,20 @@ def init(migration, project):
     for d in ['deploy', 'revert']:
         create_directory(os.path.join(migration.home, d))
     dba = DBAdmin(conf=conf, dbname=project)
-#     dba.createdb(newdb=project, newdb_owner=conf['PROJECT_USER'])
     dba.create_meta_schema()
     dba.create_changes_table()
 # _____________________________________________
 
 
-@cli.command()
-@pass_migration
-def add(migration):
+def create_script(path):
     pass
+# _____________________________________________
+
+
+@cli.command()
+@click.argument('name')
+@pass_migration
+def add(migration, name):
+    for d in ['deploy', 'revert']:
+        create_script(os.path.join(migration.home, d, '%s.py' % name))
 # _____________________________________________
