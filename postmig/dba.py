@@ -106,7 +106,7 @@ class DBAdmin:
         try:
             conn, cursor = self.connectdb(self.conf['DB_CONN_URI'])
             query = """
-                CREATE SCHEMA %s
+                CREATE SCHEMA IF NOT EXISTS %s
             """
             params = [AsIs(self.meta_schema)]
             cursor.execute(query, params)
