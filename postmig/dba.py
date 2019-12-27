@@ -6,20 +6,20 @@ import importlib
 import psycopg2
 from psycopg2.extras import DictCursor
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT, AsIs
-from config import logger  # noqa
+from config import Config, logger  # noqa
 # ========================================
 
 
 class DBAdmin:
 
-    def __init__(self, conf=None):
+    def __init__(self, conf, dbname):
         self.logger = logger
-        if conf is None:
-            from config import conf as gconf
-            self.conf = gconf
-        else:
-            self.conf = conf
+        self.conf = conf
+        self.dbname = dbname
         self.meta_schema = 'pgin'
+        self.createdb(newdb=dbname, newdb_owner=conf['PROJECT_USER'])
+        dburi = Config.db_connection_uri(dbname)
+        self.conn, self.cursor = self.connectdb(dburi)
     # __________________________________________
 
     def already_applied(self, cursor, version):
@@ -79,13 +79,13 @@ class DBAdmin:
             conn.close()
     # _____________________________
 
-    def createdb(self, newdb=None, newdb_owner=None):
+    def createdb(self, newdb, newdb_owner=None):
         """
         """
-        self.logger.info("Creating DB {} with owner {}".format(newdb, newdb_owner))
+        self.logger.info("Creating DB %s with owner %s", newdb, newdb_owner)
 
         try:
-            admin_conn, admin_cursor = self.connectdb(self.conf['DB_CONN_URI_ADMIN'])
+            admin_conn, admin_cursor = self.connectdb(Config.db_connection_uri_admin())
             admin_conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
             query = """CREATE DATABASE %(dbname)s WITH OWNER %(user)s"""
             params = {'dbname': AsIs(newdb), 'user': AsIs(newdb_owner)}
@@ -103,41 +103,25 @@ class DBAdmin:
     # ___________________________________________
 
     def create_meta_schema(self):
-        try:
-            conn, cursor = self.connectdb(self.conf['DB_CONN_URI'])
-            query = """
-                CREATE SCHEMA IF NOT EXISTS %s
-            """
-            params = [AsIs(self.meta_schema)]
-            cursor.execute(query, params)
-            conn.commit()
-        except psycopg2.errors.DuplicateSchema:
-            pass
-        finally:
-            cursor.close()
-            conn.close()
+        query = """
+            CREATE SCHEMA IF NOT EXISTS %s
+        """
+        params = [AsIs(self.meta_schema)]
+        self.cursor.execute(query, params)
+        self.conn.commit()
     # ___________________________________________
 
     def create_changes_table(self):
-
-        self.logger.info("DB_CONN_URI: {}".format(self.conf['DB_CONN_URI']))
-
-        try:
-            conn, cursor = self.connectdb(self.conf['DB_CONN_URI'])
-
-            query = """
-               CREATE TABLE IF NOT EXISTS %s.changes (
-                   changeid CHAR(128) PRIMARY KEY,
-                   name VARCHAR(100) UNIQUE,
-                   applied TIMESTAMP
-               );
-            """
-            params = [AsIs(self.meta_schema)]
-            cursor.execute(query, params)
-            conn.commit()
-        finally:
-            cursor.close()
-            conn.close()
+        query = """
+           CREATE TABLE IF NOT EXISTS %s.changes (
+               changeid CHAR(128) PRIMARY KEY,
+               name VARCHAR(100) UNIQUE,
+               applied TIMESTAMP
+           );
+        """
+        params = [AsIs(self.meta_schema)]
+        self.cursor.execute(query, params)
+        self.conn.commit()
     # _____________________________
 
     def connectdb(self, dburi):
@@ -256,9 +240,7 @@ class DBAdmin:
         Role.insert_roles()
     # __________________________________
 
-    def resetdb(self, dbname=None, logger=None):
-        if dbname is None:
-            dbname = self.conf['DBNAME']
+    def resetdb(self, dbname, logger=None):
 
         if logger is None:
             lg = self.logger
@@ -272,14 +254,15 @@ class DBAdmin:
         self.grant_connect_to_db()
     # ___________________________
 
-    def revoke_connect_from_db(self):
+    def revoke_connect_from_db(self, dbname):
         try:
-            conn, cursor = self.connectdb(self.conf['DB_CONN_URI_ADMIN'])
+            dburi = Config.db_connection_uri(dbname)
+            conn, cursor = self.connectdb(dburi)
             conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
             query = """
                 REVOKE CONNECT ON DATABASE %s FROM %s
             """
-            params = (AsIs(self.conf['DBNAME']), AsIs(self.conf['PROJECT_USER']))
+            params = (AsIs(dbname), AsIs(self.conf['PROJECT_USER']))
             cursor.execute(query, params)
         except psycopg2.ProgrammingError as e:
             if 'does not exist' in str(e):

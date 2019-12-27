@@ -18,7 +18,7 @@ def get_version(directory):
 
 
 class Config:
-    PROJECT = 'postmig'
+    LOGGER_NAME = 'postmig'
     PROJECT_USER = 'ivtapp'
 
     PROJECTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -28,7 +28,7 @@ class Config:
 
     VERSION = get_version(PROJECTDIR)
 
-    DBNAME = 'tarzan'
+#     DBNAME = 'tarzan'
     DBHOST = 'localhost'
     DBPORT = 5432
     DBUSER = PROJECT_USER
@@ -42,16 +42,18 @@ class Config:
     )
 
     DB_URI_FORMAT = 'postgresql://{dbuser}:{dbpassword}@{dbhost}:{dbport}/{dbname}'
-    DBNAME_ADMIN = 'postgres'
-    DB_CONN_URI_ADMIN = DB_URI_FORMAT.format(
-        dbname=DBNAME_ADMIN,
-        **DB_CONNECTION_PARAMS
-    )
+    # _____________________________
 
-    DB_CONN_URI = DB_URI_FORMAT.format(
-        dbname=DBNAME,
-        **DB_CONNECTION_PARAMS
-    )
+    @classmethod
+    def db_connection_uri(cls, dbname):
+        return cls.DB_URI_FORMAT.format(dbname=dbname, **cls.DB_CONNECTION_PARAMS)
+    # _____________________________
+
+    @classmethod
+    def db_connection_uri_admin(cls):
+        dbname_admin = 'postgres'
+        return cls.DB_URI_FORMAT.format(dbname=dbname_admin, **cls.DB_CONNECTION_PARAMS)
+
     # _____________________________
 
     @classmethod

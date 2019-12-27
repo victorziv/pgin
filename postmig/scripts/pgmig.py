@@ -4,11 +4,11 @@ import sys
 import click
 from config import Configurator
 conf = Configurator.configure()
-logger = Configurator.set_logging(name=conf['PROJECT'], console_logging=True)
+logger = Configurator.set_logging(name=conf['LOGGER_NAME'], console_logging=True)
 
 from lib.helpers import create_directory  # noqa
 from dba import DBAdmin  # noqa
-dba = DBAdmin(conf=conf)
+# dba = DBAdmin(conf=conf)
 # =====================================
 
 
@@ -17,7 +17,6 @@ class Migration(object):
     def __init__(self, home):
         self.logger = logger
         self.conf = conf
-        self.project = conf['PROJECT']
         self.home = home
         self.config = {}
         self.verbose = False
@@ -58,17 +57,20 @@ def cli(ctx, home, config, verbose):
 
 
 @cli.command()
+@click.argument('project')
 @pass_migration
-def init(migration):
-    """Initiates the project DB migrations.
-
+def init(migration, project):
+    """
+        Initiates the project DB migrations.
     """
 
-    click.echo('Initiating project %s migrations on path %s' % (migration.project, migration.home))
+    click.echo('Initiating project %s migrations on path %s' % (project, migration.home))
+    migration.project = project
     create_directory(migration.home)
     for d in ['deploy', 'revert']:
         create_directory(os.path.join(migration.home, d))
-    dba.createdb(newdb=conf['DBNAME'], newdb_owner=conf['PROJECT_USER'])
+    dba = DBAdmin(conf=conf, dbname=project)
+#     dba.createdb(newdb=project, newdb_owner=conf['PROJECT_USER'])
     dba.create_meta_schema()
     dba.create_changes_table()
 # _____________________________________________
