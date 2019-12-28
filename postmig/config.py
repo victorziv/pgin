@@ -124,7 +124,8 @@ class Configurator:
 
     @classmethod
     def log_to_console(cls, logging_level='INFO', out_to='stderr'):
-        logformat = '%(asctime)s - %(levelname)-10s %(message)s'
+#         logformat = '%(asctime)s - %(levelname)-10s %(message)s'
+        logformat = '%(message)s'
         handler = logging.StreamHandler(getattr(sys, out_to))
         handler.setLevel(getattr(logging, logging_level.upper()))
         handler.setFormatter(logging.Formatter(logformat))

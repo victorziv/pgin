@@ -2,7 +2,7 @@ import os
 import sys
 
 import click
-from jinja2 import Template
+from jinja2 import Environment, FileSystemLoader
 from config import Configurator, Config
 conf = Configurator.configure()
 logger = Configurator.set_logging(name=conf['LOGGER_NAME'], console_logging=True)
@@ -20,7 +20,8 @@ class Migration(object):
         self.home = home
         self.config = {}
         self.verbose = False
-        self.templates_path = os.path.join(Config.PROJECTDIR, 'templates')
+        self.template_dir = os.path.join(Config.PROJECTDIR, 'templates')
+        self.template_env = Environment(loader=FileSystemLoader(self.template_dir))
     # ___________________________________
 
     def set_config(self, key, value):
@@ -76,9 +77,19 @@ def init(migration, project):
 # _____________________________________________
 
 
-def create_script(migration, path):
-    with open(path, 'w') as fw:
-        fw.write('go daddy\n')
+def create_script(migration, direction, name):
+    template_file = '%s.tmpl' % direction
+    script_file = '%s.py' % name
+    script_path = os.path.join(migration.home, direction, script_file)
+    tmpl = migration.template_env.get_template(template_file)
+    params = {
+        'name': name
+    }
+    code = tmpl.render(params)
+    with open(script_path, 'w') as fw:
+        fw.write(code)
+
+    logger.info("Created script: %r", os.path.join(direction, script_file))
 # _____________________________________________
 
 
@@ -86,7 +97,6 @@ def create_script(migration, path):
 @click.argument('name')
 @pass_migration
 def add(migration, name):
-    print("Templates path: %r" % migration.templates_path)
-    for d in ['deploy', 'revert']:
-        create_script(migration, os.path.join(migration.home, d, '%s.py' % name))
+    for direction in ['deploy', 'revert']:
+        create_script(migration, direction, name)
 # _____________________________________________
