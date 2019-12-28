@@ -1,6 +1,6 @@
 import os
 from setuptools import setup
-APP = 'postmig'
+APP = 'pgin'
 here = os.path.abspath(os.path.dirname(__file__))
 # ==========================
 
@@ -16,9 +16,10 @@ setup(
     name=APP,
     version=read_version(),
     py_modules=[APP],
-    description='Rather primitive PostgreSQL migration facility',
+    description='Very dedicated PostgreSQL migration utility using Python',
     install_requires=[
         'jinja2',
+        'psycopg2-binary'
     ],
 
     entry_points='''
