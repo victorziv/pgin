@@ -97,6 +97,9 @@ def create_script(migration, direction, name):
 @click.argument('name')
 @pass_migration
 def add(migration, name):
+    """
+    Adds migration script to the plan
+    """
     for direction in ['deploy', 'revert']:
         create_script(migration, direction, name)
 # _____________________________________________

@@ -19,7 +19,8 @@ setup(
     description='Very dedicated PostgreSQL migration utility using Python',
     install_requires=[
         'jinja2',
-        'psycopg2-binary'
+        'psycopg2-binary',
+        'click'
     ],
 
     entry_points='''
