@@ -6,4 +6,27 @@ class {{ name.capitalize() }}(Basemigration):
     """
     Migration deploy/{{ name }}
     """
-    pass
+    def __call__(self):
+
+        """
+        Migration deploy/{{ name }}
+        """
+
+        query = """
+        """
+
+        params = []
+        try:
+            self.cursor.execute(query, params)
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
+        # ______________________________________
+
+
+# ==============================
+
+def deploy(conn):
+    {{ name.capitalize() }}(conn)()
+

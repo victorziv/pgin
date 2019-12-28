@@ -1,5 +1,6 @@
 import os
 import sys
+import importlib
 
 import click
 from jinja2 import Environment, FileSystemLoader
@@ -58,6 +59,12 @@ def cli(ctx, home, config, verbose):
 # _____________________________________________
 
 
+def turn_to_python_package(path):
+    with open(os.path.join(path, '__init__.py'), 'w') as fw:
+        fw.write('')
+# _____________________________________________
+
+
 @cli.command()
 @click.argument('project')
 @pass_migration
@@ -69,11 +76,14 @@ def init(migration, project):
     click.echo('Initiating project %s migrations on path %s' % (project, migration.home))
     migration.project = project
     create_directory(migration.home)
+    turn_to_python_package(migration.home)
     for d in ['deploy', 'revert']:
         create_directory(os.path.join(migration.home, d))
-    dba = DBAdmin(conf=conf, dbname=project)
-    dba.create_meta_schema()
-    dba.create_changes_table()
+        turn_to_python_package(os.path.join(migration.home, d))
+
+    migration.dba = DBAdmin(conf=conf, dbname=project)
+    migration.dba.create_meta_schema()
+    migration.dba.create_changes_table()
 # _____________________________________________
 
 
@@ -102,4 +112,21 @@ def add(migration, name):
     """
     for direction in ['deploy', 'revert']:
         create_script(migration, direction, name)
+# _____________________________________________
+
+
+# _____________________________________________
+
+
+@cli.command()
+@pass_migration
+def deploy(migration):
+    """
+    Deploys undeployed
+    """
+
+    module_name = 'appschema'
+    deploy_dir = os.path.join(migration.home, 'deploy')
+    mod = importlib.import_module('%s.%s' % (deploy_dir, module_name))
+    mod.deploy(project=migration.project, conn=migration.dba.conn)
 # _____________________________________________
