@@ -23,6 +23,6 @@ setup(
 
     entry_points='''
         [console_scripts]
-        postmig=postmig.scripts.pgmig:cli
+        pgin=postmig.scripts.pgmig:cli
     ''',
 )
