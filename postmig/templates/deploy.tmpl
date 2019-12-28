@@ -1,2 +1,9 @@
-class {{ name.capitalize() }}:
+from lib.basemigration import Basemigration
+# =========================================
+
+
+class {{ name.capitalize() }}(Basemigration):
+    """
+    Migration deploy/{{ name }}
+    """
     pass
