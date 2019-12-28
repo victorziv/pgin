@@ -115,9 +115,6 @@ def add(migration, name):
 # _____________________________________________
 
 
-# _____________________________________________
-
-
 @cli.command()
 @pass_migration
 def deploy(migration):
@@ -125,8 +122,8 @@ def deploy(migration):
     Deploys undeployed
     """
 
+    click.echo(dir(migration))
     module_name = 'appschema'
-    deploy_dir = os.path.join(migration.home, 'deploy')
-    mod = importlib.import_module('%s.%s' % (deploy_dir, module_name))
+    mod = importlib.import_module('%s.deploy.%s' % (conf['MIGRATIONS_PKG'], module_name))
     mod.deploy(project=migration.project, conn=migration.dba.conn)
 # _____________________________________________

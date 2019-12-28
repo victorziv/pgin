@@ -25,6 +25,7 @@ class Config:
     ROOTDIR = os.path.dirname(PROJECTDIR)
     LOGDIR = os.path.join(ROOTDIR, 'logs')
     DOCDIR = os.path.join(ROOTDIR, 'docs')
+    MIGRATIONS_PKG = 'migration'
 
     VERSION = get_version(PROJECTDIR)
 
