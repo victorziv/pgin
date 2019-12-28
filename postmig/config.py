@@ -28,7 +28,6 @@ class Config:
 
     VERSION = get_version(PROJECTDIR)
 
-#     DBNAME = 'tarzan'
     DBHOST = 'localhost'
     DBPORT = 5432
     DBUSER = PROJECT_USER
@@ -118,7 +117,7 @@ class Configurator:
 
         if console_logging:
             logger.addHandler(cls.log_to_console(console_loglevel))
-            logger.info("Log path: %s", logfile)
+            logger.debug("Log path: %s", logfile)
 
         return logger
     # ________________________________________

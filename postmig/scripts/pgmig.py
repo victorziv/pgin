@@ -2,13 +2,13 @@ import os
 import sys
 
 import click
-from config import Configurator
+from jinja2 import Template
+from config import Configurator, Config
 conf = Configurator.configure()
 logger = Configurator.set_logging(name=conf['LOGGER_NAME'], console_logging=True)
 
 from lib.helpers import create_directory  # noqa
 from dba import DBAdmin  # noqa
-# dba = DBAdmin(conf=conf)
 # =====================================
 
 
@@ -20,6 +20,7 @@ class Migration(object):
         self.home = home
         self.config = {}
         self.verbose = False
+        self.templates_path = os.path.join(Config.PROJECTDIR, 'templates')
     # ___________________________________
 
     def set_config(self, key, value):
@@ -75,8 +76,9 @@ def init(migration, project):
 # _____________________________________________
 
 
-def create_script(path):
-    pass
+def create_script(migration, path):
+    with open(path, 'w') as fw:
+        fw.write('go daddy\n')
 # _____________________________________________
 
 
@@ -84,6 +86,7 @@ def create_script(path):
 @click.argument('name')
 @pass_migration
 def add(migration, name):
+    print("Templates path: %r" % migration.templates_path)
     for d in ['deploy', 'revert']:
-        create_script(os.path.join(migration.home, d, '%s.py' % name))
+        create_script(migration, os.path.join(migration.home, d, '%s.py' % name))
 # _____________________________________________

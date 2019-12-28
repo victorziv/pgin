@@ -16,9 +16,9 @@ setup(
     name=APP,
     version=read_version(),
     py_modules=[APP],
-    description='HW info for all',
+    description='Rather primitive PostgreSQL migration facility',
     install_requires=[
-        'elasticsearch',
+        'jinja2',
     ],
 
     entry_points='''
