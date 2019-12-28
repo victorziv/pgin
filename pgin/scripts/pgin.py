@@ -74,7 +74,8 @@ def init(migration, project):
     """
 
     click.echo('Initiating project %s migrations on path %s' % (project, migration.home))
-    migration.project = project
+    migration.set_config('project', project)
+    click.echo("Migration config: %r", migration.config)
     create_directory(migration.home)
     turn_to_python_package(migration.home)
     for d in ['deploy', 'revert']:
@@ -121,9 +122,9 @@ def deploy(migration):
     """
     Deploys undeployed
     """
+    click.echo("Migration config: %r" % migration.config)
 
-    click.echo(dir(migration))
     module_name = 'appschema'
     mod = importlib.import_module('%s.deploy.%s' % (conf['MIGRATIONS_PKG'], module_name))
-    mod.deploy(project=migration.project, conn=migration.dba.conn)
+    mod.deploy(project=migration.config['project'], conn=migration.dba.conn)
 # _____________________________________________
