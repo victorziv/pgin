@@ -52,7 +52,7 @@ def cli(ctx, home, config, verbose):
     """
     postmig is a command line tool for HWInfo project DB migrations management
     """
-    ctx.obj = Migration(os.path.abspath(home))
+    ctx.obj = Migration(home=os.path.abspath(home))
     ctx.obj.verbose = verbose
     for key, value in config:
         ctx.obj.set_config(key, value)
@@ -74,8 +74,6 @@ def init(migration, project):
     """
 
     click.echo('Initiating project %s migrations on path %s' % (project, migration.home))
-    migration.set_config('project', project)
-    click.echo("Migration config: %r", migration.config)
     create_directory(migration.home)
     turn_to_python_package(migration.home)
     for d in ['deploy', 'revert']:
