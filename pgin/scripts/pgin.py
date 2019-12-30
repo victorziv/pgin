@@ -15,10 +15,11 @@ from dba import DBAdmin  # noqa
 
 class Migration(object):
 
-    def __init__(self, home):
+    def __init__(self, home, project):
         self.logger = logger
         self.conf = conf
         self.home = home
+        self.project = project
         self.config = {}
         self.verbose = False
         self.template_dir = os.path.join(Config.PROJECTDIR, 'templates')
@@ -46,13 +47,14 @@ pass_migration = click.make_pass_decorator(Migration)
 @click.option('--config', nargs=2, multiple=True,
               metavar='KEY VALUE', help='Overrides a config key/value pair.')
 @click.option('--verbose', '-v', is_flag=True, help='Enables verbose mode.')
+@click.option('-p', '--project', envvar='PROJECT', help='Parent project name')
 @click.version_option('0.1.0')
 @click.pass_context
-def cli(ctx, home, config, verbose):
+def cli(ctx, home, config, verbose, project):
     """
     postmig is a command line tool for HWInfo project DB migrations management
     """
-    ctx.obj = Migration(home=os.path.abspath(home))
+    ctx.obj = Migration(home=os.path.abspath(home), project=project)
     ctx.obj.verbose = verbose
     for key, value in config:
         ctx.obj.set_config(key, value)
@@ -66,21 +68,20 @@ def turn_to_python_package(path):
 
 
 @cli.command()
-@click.argument('project')
 @pass_migration
-def init(migration, project):
+def init(migration):
     """
         Initiates the project DB migrations.
     """
 
-    click.echo('Initiating project %s migrations on path %s' % (project, migration.home))
+    click.echo('Initiating project %s migrations on path %s' % (migration.project, migration.home))
     create_directory(migration.home)
     turn_to_python_package(migration.home)
     for d in ['deploy', 'revert']:
         create_directory(os.path.join(migration.home, d))
         turn_to_python_package(os.path.join(migration.home, d))
 
-    migration.dba = DBAdmin(conf=conf, dbname=project)
+    migration.dba = DBAdmin(conf=conf, dbname=migration.project)
     migration.dba.create_meta_schema()
     migration.dba.create_changes_table()
 # _____________________________________________
@@ -120,9 +121,9 @@ def deploy(migration):
     """
     Deploys undeployed
     """
-    click.echo("Migration config: %r" % migration.config)
 
     module_name = 'appschema'
     mod = importlib.import_module('%s.deploy.%s' % (conf['MIGRATIONS_PKG'], module_name))
-    mod.deploy(project=migration.config['project'], conn=migration.dba.conn)
+    logger.info('Deploying project: %s', migration.project)
+#     mod.deploy(project=migration.project, conn=migration.dba.conn)
 # _____________________________________________
