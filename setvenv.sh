@@ -1,6 +1,6 @@
 #!/bin/bash
 
-APP=${1:-postmig}
+APP=${1:-tarzan}
 ROOTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 VENVDIR="$ROOTDIR/venv${APP}"
 # _________________________
@@ -16,12 +16,13 @@ install_modules() {
 
 set_environment() {
     echo "export PYTHONPATH=${ROOTDIR}:${ROOTDIR}/${APP}" >> ${VENVDIR}/bin/activate
+    echo "export PROJECT=${APP}" >> ${VENVDIR}/bin/activate
 }
 # _________________________
 
 main() {
     rm -rf $VENVDIR
-    virtualenv --python $(which python3.7) --no-site-packages --clear --verbose $VENVDIR
+    virtualenv --python $(which python3.6) --no-site-packages --clear --verbose $VENVDIR
     set_environment
     install_modules
 }
