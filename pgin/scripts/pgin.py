@@ -4,12 +4,12 @@ import importlib
 
 import click
 from jinja2 import Environment, FileSystemLoader
-from config import Configurator, Config
+from pgin.config import Configurator, Config
 conf = Configurator.configure()
 logger = Configurator.set_logging(name=conf['LOGGER_NAME'], console_logging=True)
 
-from lib.helpers import create_directory  # noqa
-from dba import DBAdmin  # noqa
+from pgin.lib.helpers import create_directory  # noqa
+from pgin.dba import DBAdmin  # noqa
 # =====================================
 
 
@@ -41,9 +41,22 @@ pass_migration = click.make_pass_decorator(Migration)
 # _____________________________________________
 
 
+def validate_migration_home(ctx, param, value):
+    if value is None:
+        raise click.BadParameter('MIGRATION_HOME env variable has to be set to a valid path')
+
+    return value
+# _____________________________________________
+
+
 @click.group()
-@click.option('--home', envvar='MIGRATION_HOME', default=os.path.join(conf['PROJECTDIR'], 'migration'),
-              metavar='PATH', help='Changes the migration default container')
+@click.option(
+    '--home',
+    envvar='MIGRATION_HOME',
+    metavar='PATH',
+    callback=validate_migration_home,
+    help='Sets migration container folder'
+)
 @click.option('--config', nargs=2, multiple=True,
               metavar='KEY VALUE', help='Overrides a config key/value pair.')
 @click.option('--verbose', '-v', is_flag=True, help='Enables verbose mode.')

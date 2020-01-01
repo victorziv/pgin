@@ -6,7 +6,7 @@ import importlib
 import psycopg2
 from psycopg2.extras import DictCursor
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT, AsIs
-from config import Config, logger  # noqa
+from pgin.config import Config, logger  # noqa
 # ========================================
 
 

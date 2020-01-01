@@ -2,7 +2,7 @@ import os
 import sys
 import datetime
 import logging
-from lib.helpers import create_directory
+from pgin.lib.helpers import create_directory
 
 logger = None
 conf = None
@@ -18,7 +18,7 @@ def get_version(directory):
 
 
 class Config:
-    LOGGER_NAME = 'postmig'
+    LOGGER_NAME = 'pgin'
     PROJECT_USER = 'ivtapp'
 
     PROJECTDIR = os.path.abspath(os.path.dirname(__file__))
