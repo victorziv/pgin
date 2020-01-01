@@ -4,13 +4,10 @@ from lib.basemigration import Basemigration
 
 class {{ name.capitalize() }}(Basemigration):
     """
-    Migration deploy/{{ name }}
-    """
-    def __call__(self):
-
-        """
         Migration deploy/{{ name }}
-        """
+    """
+
+    def __call__(self):
 
         query = """
         """
@@ -23,10 +20,3 @@ class {{ name.capitalize() }}(Basemigration):
             self.conn.rollback()
             raise
         # ______________________________________
-
-
-# ==============================
-
-def deploy(conn):
-    {{ name.capitalize() }}(conn)()
-

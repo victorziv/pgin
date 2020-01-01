@@ -4,6 +4,19 @@ from lib.basemigration import Basemigration
 
 class {{ name.capitalize() }}(Basemigration):
     """
-    Migration revert/{{ name }}
+        Migration revert/{{ name }}
     """
-    pass
+
+    def __call__(self):
+
+        query = """
+        """
+
+        params = []
+        try:
+            self.cursor.execute(query, params)
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
+        # ______________________________________
