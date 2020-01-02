@@ -14,13 +14,12 @@ from pgin.dba import DBAdmin  # noqa
 
 class Migration(object):
 
-    def __init__(self, home, project, project_user, dbpassword):
+    def __init__(self, home, project, project_user):
         self.logger = logger
         self.conf = conf
         self.home = home
         self.project = project
-        self.dbuser = project_user
-        self.dbpassword = dbpassword
+        self.project_user = project_user
         self.template_dir = os.path.join(Config.PROJECTDIR, 'templates')
         self.template_env = Environment(loader=FileSystemLoader(self.template_dir))
     # ___________________________________
@@ -80,7 +79,7 @@ def validate_project_user(ctx, param, value):
 )
 @click.version_option('0.1.0')
 @click.pass_context
-def cli(ctx, home, verbose, project, project_user):
+def cli(ctx, home, project, project_user):
     """
     postmig is a command line tool for HWInfo project DB migrations management
     """
@@ -155,7 +154,10 @@ def deploy(migration):
     logger.info('Deploying project: %s', migration.project)
     deploy_cls = getattr(mod, module_name.capitalize())
     dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
-    deploy = deploy_cls(project=migration.project, conn=dba.conn)
-    deploy()
+    deploy = deploy_cls(project=migration.project, project_user=migration.project_user, conn=dba.conn)
+    try:
+        deploy()
+    except Exception:
+        logger.exception("Migration exception")
 
 # _____________________________________________

@@ -1,7 +1,4 @@
-import sys
 import os
-import datetime
-import glob
 import importlib
 import psycopg2
 from psycopg2.extras import DictCursor
@@ -19,7 +16,7 @@ class DBAdmin:
         self.dbuser = dbuser
         self.meta_schema = 'pgin'
         self.createdb(newdb=dbname, newdb_owner=self.dbuser)
-        dburi = Config.db_connection_uri(dbname)
+        dburi = Config.db_connection_uri(dbname, dbuser)
         self.conn, self.cursor = self.connectdb(dburi)
     # __________________________________________
 
@@ -86,7 +83,9 @@ class DBAdmin:
         self.logger.info("Creating DB %s with owner %s", newdb, newdb_owner)
 
         try:
-            admin_conn, admin_cursor = self.connectdb(Config.db_connection_uri_admin())
+            admin_db_uri = Config.db_connection_uri_admin(dbuser=newdb_owner)
+            self.logger.info("Admin DB URI: %r", admin_db_uri)
+            admin_conn, admin_cursor = self.connectdb(admin_db_uri)
             admin_conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
             query = """CREATE DATABASE %(dbname)s WITH OWNER %(user)s"""
             params = {'dbname': AsIs(newdb), 'user': AsIs(newdb_owner)}
@@ -255,9 +254,9 @@ class DBAdmin:
         self.grant_connect_to_db()
     # ___________________________
 
-    def revoke_connect_from_db(self, dbname):
+    def revoke_connect_from_db(self, dbname, dbuser):
         try:
-            dburi = Config.db_connection_uri(dbname)
+            dburi = Config.db_connection_uri(dbname, dbuser)
             conn, cursor = self.connectdb(dburi)
             conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
             query = """
@@ -279,68 +278,67 @@ class DBAdmin:
                 conn.close()
     # ___________________________________________
 
-    def upgradedb(self, upto_version):
-#         conn, cursor = self.connectdb(self.conf['DB_CONN_URI'])
-        self.logger.info("DB upgrade up to version: {}".format(upto_version))
-        versions = self.get_upgrade_versions(upto_version)
-        self.apply_versions(versions)
+#     def upgradedb(self, upto_version):
+#         self.logger.info("DB upgrade up to version: {}".format(upto_version))
+#         versions = self.get_upgrade_versions(upto_version)
+#         self.apply_versions(versions)
     # _____________________________
 
-    def insert_changelog_record(self, version_number, name):
+#     def insert_changelog_record(self, version_number, name):
 
-        try:
-            conn, cursor = self.connectdb(self.conf['DB_CONN_URI'])
+#         try:
+#             conn, cursor = self.connectdb(self.conf['DB_CONN_URI'])
 
-            query = """
-                INSERT INTO changelog
-                (version, name, applied)
-                VALUES (%s, %s, %s)
-                RETURNING id
-            """
-            params = (version_number, name, datetime.datetime.utcnow())
+#             query = """
+#                 INSERT INTO changelog
+#                 (version, name, applied)
+#                 VALUES (%s, %s, %s)
+#                 RETURNING id
+#             """
+#             params = (version_number, name, datetime.datetime.utcnow())
 
-            cursor.execute(query, params)
-            conn.commit()
-            fetch = cursor.fetchone()
-            return fetch['id']
+#             cursor.execute(query, params)
+#             conn.commit()
+#             fetch = cursor.fetchone()
+#             return fetch['id']
 
-        except Exception as e:
-            self.logger.exception('ERROR: %s; rolling back' % e)
-            conn.rollback()
-            return
+#         except Exception as e:
+#             self.logger.exception('ERROR: %s; rolling back' % e)
+#             conn.rollback()
+#             return
     # ____________________________
 
-    def get_upgrade_versions(self, version):
+#     def get_upgrade_versions(self, version):
 
-        # --------------------------
-        def _compose_version(vfile):
-            module = os.path.splitext(os.path.basename(vfile))[0]
-            version, name = module.split('_', 1)
-            return dict(name=name, module=module, version=version)
-        # --------------------------
+#         # --------------------------
+#         def _compose_version(vfile):
+#             module = os.path.splitext(os.path.basename(vfile))[0]
+#             version, name = module.split('_', 1)
+#             return dict(name=name, module=module, version=version)
+#         # --------------------------
 
-        versions_path = os.path.join(self.conf['PROJECT_DIR'], self.conf['MIGRATIONS_DIR'])
-        self.logger.debug("Versions path: {}".format(versions_path))
-        vfiles = glob.iglob(os.path.join(versions_path, '[0-9]*.py'))
-        versions = sorted(
-            [_compose_version(vfile) for vfile in vfiles],
-            key=lambda x: int(x['version'])
-        )
-        self.logger.debug("Versions: {}".format(versions))
-        if version:
-            return [v for v in versions if v['version'] == version]
-        return versions
+#         versions_path = os.path.join(self.conf['PROJECT_DIR'], self.conf['MIGRATIONS_DIR'])
+#         self.logger.debug("Versions path: {}".format(versions_path))
+#         vfiles = glob.iglob(os.path.join(versions_path, '[0-9]*.py'))
+#         versions = sorted(
+#             [_compose_version(vfile) for vfile in vfiles],
+#             key=lambda x: int(x['version'])
+#         )
+#         self.logger.debug("Versions: {}".format(versions))
+#         if version:
+#             return [v for v in versions if v['version'] == version]
+#         return versions
     # ___________________________
 
-    def prompt(self, question):
-        from distutils.util import strtobool
+#     def prompt(self, question):
+#         from distutils.util import strtobool
 
-        sys.stdout.write('{} [y/n]: '.format(question))
-        val = input()
-        try:
-            ret = strtobool(val)
-        except ValueError:
-            sys.stdout.write('Please answer with a y/n\n')
-            return self.prompt(question)
+#         sys.stdout.write('{} [y/n]: '.format(question))
+#         val = input()
+#         try:
+#             ret = strtobool(val)
+#         except ValueError:
+#             sys.stdout.write('Please answer with a y/n\n')
+#             return self.prompt(question)
 
-        return ret
+#         return ret

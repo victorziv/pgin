@@ -36,25 +36,25 @@ class Config:
         dbport=DBPORT,
     )
 
-    DB_URI_FORMAT = 'postgresql://{dbuser}:{dbpassword}@{dbhost}:{dbport}/{dbname}'
+#     DB_URI_FORMAT = 'postgresql://{dbuser}:{dbpassword}@{dbhost}:{dbport}/{dbname}'
+    DB_URI_FORMAT = 'postgresql://{dbuser}@{dbhost}:{dbport}/{dbname}'
     # _____________________________
 
     @classmethod
-    def db_connection_uri(cls, dbname, dbuser, dbpassword):
+    def db_connection_uri(cls, dbname, dbuser):
         return cls.DB_URI_FORMAT.format(
             dbname=dbname,
             dbuser=dbuser,
-            dbpassword=dbpassword,
             **cls.DB_CONNECTION_PARAMS
         )
     # _____________________________
 
     @classmethod
-    def db_connection_uri_admin(cls):
-        dbname_admin = 'postgres'
+    def db_connection_uri_admin(cls, dbuser):
+        dbname_admin = 'template1'
         return cls.DB_URI_FORMAT.format(
             dbname=dbname_admin,
-            dbuser=dbname_admin,
+            dbuser=dbuser,
             **cls.DB_CONNECTION_PARAMS)
 
     # _____________________________
