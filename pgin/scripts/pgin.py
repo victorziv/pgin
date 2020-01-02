@@ -109,8 +109,11 @@ def init(migration):
 
     migration.dba = DBAdmin(
         conf=conf, dbname=migration.project, dbuser=migration.project_user)
+    migration.dba.createdb()
     migration.dba.create_meta_schema()
     migration.dba.create_changes_table()
+#     dburi = Config.db_connection_uri(dbname, dbuser)
+#     self.conn, self.cursor = self.connectdb(dburi)
 # _____________________________________________
 
 

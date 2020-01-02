@@ -15,9 +15,9 @@ class DBAdmin:
         self.dbname = dbname
         self.dbuser = dbuser
         self.meta_schema = 'pgin'
-        self.createdb(newdb=dbname, newdb_owner=self.dbuser)
-        dburi = Config.db_connection_uri(dbname, dbuser)
-        self.conn, self.cursor = self.connectdb(dburi)
+#         self.createdb(newdb=dbname, newdb_owner=self.dbuser)
+#         dburi = Config.db_connection_uri(dbname, dbuser)
+#         self.conn, self.cursor = self.connectdb(dburi)
     # __________________________________________
 
     def already_applied(self, cursor, version):
@@ -77,9 +77,16 @@ class DBAdmin:
             conn.close()
     # _____________________________
 
-    def createdb(self, newdb, newdb_owner=None):
+    def createdb(self, newdb=None, newdb_owner=None):
         """
         """
+
+        if newdb is None:
+            newdb = self.dbname
+
+        if newdb_owner is None:
+            newdb_owner = self.dbuser
+
         self.logger.info("Creating DB %s with owner %s", newdb, newdb_owner)
 
         try:
