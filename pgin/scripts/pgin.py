@@ -1,5 +1,4 @@
 import os
-import sys
 import importlib
 
 import click
@@ -15,27 +14,18 @@ from pgin.dba import DBAdmin  # noqa
 
 class Migration(object):
 
-    def __init__(self, home, project, project_user):
+    def __init__(self, home, project, project_user, dbpassword):
         self.logger = logger
         self.conf = conf
         self.home = home
         self.project = project
-        self.project_user = project_user
-        self.config = {}
-        self.verbose = False
+        self.dbuser = project_user
+        self.dbpassword = dbpassword
         self.template_dir = os.path.join(Config.PROJECTDIR, 'templates')
         self.template_env = Environment(loader=FileSystemLoader(self.template_dir))
     # ___________________________________
 
-    def set_config(self, key, value):
-        self.config[key] = value
-        if self.verbose:
-            click.echo('  config[%s] = %s' % (key, value), file=sys.stderr)
-    # ___________________________________
-
-    def __repr__(self):
-        return '<Repo %r>' % self.home
-# _____________________________________________
+# =============================================
 
 
 pass_migration = click.make_pass_decorator(Migration)
@@ -52,7 +42,8 @@ def validate_migration_home(ctx, param, value):
 
 def validate_project(ctx, param, value):
     if value is None:
-        raise click.BadParameter('PROJECT env variable has to be set to the parent project name')
+        raise click.BadParameter(
+            'PROJECT environment variable has to be set to the parent project name')
 
     return value
 # _____________________________________________
@@ -60,7 +51,8 @@ def validate_project(ctx, param, value):
 
 def validate_project_user(ctx, param, value):
     if value is None:
-        raise click.BadParameter('PROJECT_USER env variable has to be set to the parent project generic user name')
+        raise click.BadParameter(
+            'PROJECT_USER environment variable has to be set to the parent project generic user name')
 
     return value
 # _____________________________________________
@@ -74,9 +66,6 @@ def validate_project_user(ctx, param, value):
     callback=validate_migration_home,
     help='Sets migration container folder'
 )
-@click.option('--config', nargs=2, multiple=True,
-              metavar='KEY VALUE', help='Overrides a config key/value pair.')
-@click.option('--verbose', '-v', is_flag=True, help='Enables verbose mode.')
 @click.option(
     '--project',
     envvar='PROJECT',
@@ -91,14 +80,11 @@ def validate_project_user(ctx, param, value):
 )
 @click.version_option('0.1.0')
 @click.pass_context
-def cli(ctx, home, config, verbose, project, project_user):
+def cli(ctx, home, verbose, project, project_user):
     """
     postmig is a command line tool for HWInfo project DB migrations management
     """
     ctx.obj = Migration(home=os.path.abspath(home), project=project, project_user=project_user)
-    ctx.obj.verbose = verbose
-    for key, value in config:
-        ctx.obj.set_config(key, value)
 # _____________________________________________
 
 
@@ -122,7 +108,8 @@ def init(migration):
         create_directory(os.path.join(migration.home, d))
         turn_to_python_package(os.path.join(migration.home, d))
 
-    migration.dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
+    migration.dba = DBAdmin(
+        conf=conf, dbname=migration.project, dbuser=migration.project_user)
     migration.dba.create_meta_schema()
     migration.dba.create_changes_table()
 # _____________________________________________
