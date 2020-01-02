@@ -139,7 +139,9 @@ def deploy(migration):
     module_name = 'appschema'
     mod = importlib.import_module('%s.deploy.%s' % (conf['MIGRATIONS_PKG'], module_name))
     logger.info('Deploying project: %s', migration.project)
-    cls = getattr(mod, module_name.capitalize())
+    deploy_cls = getattr(mod, module_name.capitalize())
     dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
+    deploy = deploy_cls(project=migration.project, conn=dba.conn)
+    deploy()
 
 # _____________________________________________
