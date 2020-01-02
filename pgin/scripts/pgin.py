@@ -50,6 +50,22 @@ def validate_migration_home(ctx, param, value):
 # _____________________________________________
 
 
+def validate_project(ctx, param, value):
+    if value is None:
+        raise click.BadParameter('PROJECT env variable has to be set to the parent project name')
+
+    return value
+# _____________________________________________
+
+
+def validate_project_user(ctx, param, value):
+    if value is None:
+        raise click.BadParameter('PROJECT_USER env variable has to be set to the parent project generic user name')
+
+    return value
+# _____________________________________________
+
+
 @click.group()
 @click.option(
     '--home',
@@ -61,14 +77,25 @@ def validate_migration_home(ctx, param, value):
 @click.option('--config', nargs=2, multiple=True,
               metavar='KEY VALUE', help='Overrides a config key/value pair.')
 @click.option('--verbose', '-v', is_flag=True, help='Enables verbose mode.')
-@click.option('-p', '--project', envvar='PROJECT', help='Parent project name')
+@click.option(
+    '--project',
+    envvar='PROJECT',
+    callback=validate_project,
+    help='Parent project name'
+)
+@click.option(
+    '--project_user',
+    envvar='PROJECT_USER',
+    callback=validate_project_user,
+    help='Parent project generic user account'
+)
 @click.version_option('0.1.0')
 @click.pass_context
-def cli(ctx, home, config, verbose, project):
+def cli(ctx, home, config, verbose, project, project_user):
     """
     postmig is a command line tool for HWInfo project DB migrations management
     """
-    ctx.obj = Migration(home=os.path.abspath(home), project=project)
+    ctx.obj = Migration(home=os.path.abspath(home), project=project, project_user=project_user)
     ctx.obj.verbose = verbose
     for key, value in config:
         ctx.obj.set_config(key, value)
