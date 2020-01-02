@@ -95,7 +95,7 @@ def init(migration):
         create_directory(os.path.join(migration.home, d))
         turn_to_python_package(os.path.join(migration.home, d))
 
-    migration.dba = DBAdmin(conf=conf, dbname=migration.project)
+    migration.dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
     migration.dba.create_meta_schema()
     migration.dba.create_changes_table()
 # _____________________________________________
@@ -140,7 +140,6 @@ def deploy(migration):
     mod = importlib.import_module('%s.deploy.%s' % (conf['MIGRATIONS_PKG'], module_name))
     logger.info('Deploying project: %s', migration.project)
     cls = getattr(mod, module_name.capitalize())
-    dba = DBAdmin(conf=conf, dbname=migration.project, migration.project_user)
+    dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
 
-#     mod.deploy(project=migration.project, conn=migration.dba.conn)
 # _____________________________________________

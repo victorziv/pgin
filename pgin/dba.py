@@ -12,12 +12,13 @@ from pgin.config import Config, logger  # noqa
 
 class DBAdmin:
 
-    def __init__(self, conf, dbname):
+    def __init__(self, conf, dbname, dbuser):
         self.logger = logger
         self.conf = conf
         self.dbname = dbname
+        self.dbuser = dbuser
         self.meta_schema = 'pgin'
-        self.createdb(newdb=dbname, newdb_owner=conf['PROJECT_USER'])
+        self.createdb(newdb=dbname, newdb_owner=self.dbuser)
         dburi = Config.db_connection_uri(dbname)
         self.conn, self.cursor = self.connectdb(dburi)
     # __________________________________________
