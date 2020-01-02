@@ -15,11 +15,12 @@ from pgin.dba import DBAdmin  # noqa
 
 class Migration(object):
 
-    def __init__(self, home, project):
+    def __init__(self, home, project, project_user):
         self.logger = logger
         self.conf = conf
         self.home = home
         self.project = project
+        self.project_user = project_user
         self.config = {}
         self.verbose = False
         self.template_dir = os.path.join(Config.PROJECTDIR, 'templates')
@@ -138,5 +139,8 @@ def deploy(migration):
     module_name = 'appschema'
     mod = importlib.import_module('%s.deploy.%s' % (conf['MIGRATIONS_PKG'], module_name))
     logger.info('Deploying project: %s', migration.project)
+    cls = getattr(mod, module_name.capitalize())
+    dba = DBAdmin(conf=conf, dbname=migration.project, migration.project_user)
+
 #     mod.deploy(project=migration.project, conn=migration.dba.conn)
 # _____________________________________________
