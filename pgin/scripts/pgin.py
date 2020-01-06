@@ -1,6 +1,6 @@
 import os
 import importlib
-
+import json
 import click
 from jinja2 import Environment, FileSystemLoader
 from pgin.config import Configurator, Config
@@ -100,11 +100,22 @@ def init(migration):
         Initiates the project DB migrations.
     """
 
-    click.echo('Initiating project %s migrations on path %s' % (migration.project, migration.home))
+    plan_file = '%s.plan' % migration.project
+    plan_path = os.path.join(migration.home, plan_file)
+    if os.path.exists(plan_path):
+        logger.info("Project %s migration facility already initiated", migration.project)
+        return
+
+    logger.info('Initiating project %s migrations', migration.project)
+    logger.info('Migration container path: %s', migration.home)
     create_directory(migration.home)
     turn_to_python_package(migration.home)
+
+    create_plan(migration, plan_file, plan_path)
+
     for d in ['deploy', 'revert']:
         create_directory(os.path.join(migration.home, d))
+        logger.info("Created %s/", d)
         turn_to_python_package(os.path.join(migration.home, d))
 
     dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
@@ -114,8 +125,22 @@ def init(migration):
     dba.cursor = dba.conn.cursor()
     dba.create_meta_schema()
     dba.create_changes_table()
+
     dba.cursor.close()
     dba.conn.close()
+# _____________________________________________
+
+
+def create_plan(migration, plan_file, plan_path):
+    plan_file = '%s.plan' % migration.project
+    pland = {
+        'project': migration.project,
+        'changes': []
+    }
+    with open(plan_path, 'w') as fw:
+        json.dump(pland, fw, indent=4)
+
+    logger.info("Created %s", plan_file)
 # _____________________________________________
 
 
