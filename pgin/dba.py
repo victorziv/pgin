@@ -92,7 +92,8 @@ class DBAdmin:
         try:
             admin_db_uri = Config.db_connection_uri_admin(dbuser=newdb_owner)
             self.logger.info("Admin DB URI: %r", admin_db_uri)
-            admin_conn, admin_cursor = self.connectdb(admin_db_uri)
+            admin_conn = self.connectdb(admin_db_uri)
+            admin_cursor = admin_conn.cursor()
             admin_conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
             query = """CREATE DATABASE %(dbname)s WITH OWNER %(user)s"""
             params = {'dbname': AsIs(newdb), 'user': AsIs(newdb_owner)}
@@ -134,13 +135,13 @@ class DBAdmin:
     def connectdb(self, dburi):
         try:
             conn = psycopg2.connect(dburi)
-            cursor = conn.cursor(cursor_factory=DictCursor)
-            return conn, cursor
+#             cursor = conn.cursor(cursor_factory=DictCursor)
+            return conn
 
         except psycopg2.OperationalError as e:
             if 'does not exist' in str(e):
                 self.logger.exception("OOPS: {}".format(e))
-                return None, None
+                return
             else:
                 raise
     # ___________________________

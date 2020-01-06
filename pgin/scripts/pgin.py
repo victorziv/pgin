@@ -107,11 +107,10 @@ def init(migration):
         create_directory(os.path.join(migration.home, d))
         turn_to_python_package(os.path.join(migration.home, d))
 
-    migration.dba = DBAdmin(
-        conf=conf, dbname=migration.project, dbuser=migration.project_user)
-    migration.dba.createdb()
-    migration.dba.create_meta_schema()
-    migration.dba.create_changes_table()
+    dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
+    dba.createdb()
+#     dba.create_meta_schema()
+#     dba.create_changes_table()
 #     dburi = Config.db_connection_uri(dbname, dbuser)
 #     self.conn, self.cursor = self.connectdb(dburi)
 # _____________________________________________
@@ -154,11 +153,14 @@ def deploy(migration):
 
     module_name = 'appschema'
     mod = importlib.import_module('%s.deploy.%s' % (conf['MIGRATIONS_PKG'], module_name))
-    logger.info('Deploying project: %s', migration.project)
     deploy_cls = getattr(mod, module_name.capitalize())
     dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
-    deploy = deploy_cls(project=migration.project, project_user=migration.project_user, conn=dba.conn)
+    dburi = Config.db_connection_uri(migration.project, migration.project_user)
+    logger.info('Deploying changes to: %s', dburi)
+    conn = dba.connectdb(dburi)
+    deploy = deploy_cls(project=migration.project, project_user=migration.project_user, conn=conn)
     try:
+        logger.info("+ %s %s ok", module_name, '.' * 30)
         deploy()
     except Exception:
         logger.exception("Migration exception")
