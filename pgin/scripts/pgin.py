@@ -109,10 +109,13 @@ def init(migration):
 
     dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
     dba.createdb()
-#     dba.create_meta_schema()
-#     dba.create_changes_table()
-#     dburi = Config.db_connection_uri(dbname, dbuser)
-#     self.conn, self.cursor = self.connectdb(dburi)
+    dburi = Config.db_connection_uri(dbname=migration.project, dbuser=migration.project_user)
+    dba.conn = dba.connectdb(dburi)
+    dba.cursor = dba.conn.cursor()
+    dba.create_meta_schema()
+    dba.create_changes_table()
+    dba.cursor.close()
+    dba.conn.close()
 # _____________________________________________
 
 
@@ -164,5 +167,6 @@ def deploy(migration):
         deploy()
     except Exception:
         logger.exception("Migration exception")
-
+    finally:
+        conn.close()
 # _____________________________________________
