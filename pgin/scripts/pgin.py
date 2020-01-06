@@ -131,6 +131,17 @@ def init(migration):
 # _____________________________________________
 
 
+def add_to_plan(migration, change):
+    plan_file = '%s.plan' % migration.project
+    plan_path = os.path.join(migration.home, plan_file)
+    with open(plan_path, 'r') as fr:
+        plan = json.load(fr)
+        logger.info("Current plan: %r", plan)
+
+    logger.info("Add %s to %s", change, plan_file)
+# _____________________________________________
+
+
 def create_plan(migration, plan_file, plan_path):
     plan_file = '%s.plan' % migration.project
     pland = {
@@ -161,14 +172,16 @@ def create_script(migration, direction, name):
 
 
 @cli.command()
-@click.argument('name')
+@click.argument('change')
 @pass_migration
-def add(migration, name):
+def add(migration, change):
     """
     Adds migration script to the plan
     """
     for direction in ['deploy', 'revert']:
-        create_script(migration, direction, name)
+        create_script(migration, direction, change)
+
+    add_to_plan(migration, change)
 # _____________________________________________
 
 
@@ -179,15 +192,15 @@ def deploy(migration):
     Deploys undeployed
     """
 
-    module_name = 'appschema'
-    mod = importlib.import_module('%s.deploy.%s' % (conf['MIGRATIONS_PKG'], module_name))
-    deploy_cls = getattr(mod, module_name.capitalize())
-    dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
-    dburi = Config.db_connection_uri(migration.project, migration.project_user)
-    logger.info('Deploying changes to: %s', dburi)
-    conn = dba.connectdb(dburi)
-    deploy = deploy_cls(project=migration.project, project_user=migration.project_user, conn=conn)
     try:
+        module_name = 'appschema'
+        mod = importlib.import_module('%s.deploy.%s' % (conf['MIGRATIONS_PKG'], module_name))
+        deploy_cls = getattr(mod, module_name.capitalize())
+        dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
+        dburi = Config.db_connection_uri(migration.project, migration.project_user)
+        logger.info('Deploying changes to: %s', dburi)
+        conn = dba.connectdb(dburi)
+        deploy = deploy_cls(project=migration.project, project_user=migration.project_user, conn=conn)
         logger.info("+ %s %s ok", module_name, '.' * 30)
         deploy()
     except Exception:
