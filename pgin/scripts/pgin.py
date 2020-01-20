@@ -114,6 +114,7 @@ def init(migration):
     dba.cursor = dba.conn.cursor()
     dba.create_meta_schema()
     dba.create_changes_table()
+    dba.set_search_path()
     dba.cursor.close()
     dba.conn.close()
 # _____________________________________________

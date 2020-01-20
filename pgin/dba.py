@@ -1,7 +1,7 @@
 import os
 import importlib
 import psycopg2
-from psycopg2.extras import DictCursor
+# from psycopg2.extras import DictCursor
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT, AsIs
 from pgin.config import Config, logger  # noqa
 # ========================================
@@ -229,6 +229,16 @@ class DBAdmin:
         self.show_search_path()
         app.db = self
         return app
+    # _____________________________
+
+    def set_search_path(self):
+        query = """
+            ALTER DATABASE %s
+            SET search_path=%s,public
+        """
+        params = (AsIs(self.dbname), AsIs(self.dbname))
+        self.cursor.execute(query, params)
+        self.conn.commit()
     # _____________________________
 
     def show_search_path(self):
