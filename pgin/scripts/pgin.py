@@ -117,6 +117,7 @@ def init(migration):
     dba.set_search_path()
     dba.cursor.close()
     dba.conn.close()
+    create_plan(home=migration.home)
 # _____________________________________________
 
 
@@ -133,6 +134,17 @@ def create_script(migration, direction, name):
         fw.write(code)
 
     logger.info("Created script: %r", os.path.join(direction, script_file))
+# _____________________________________________
+
+
+def create_plan(home):
+    """
+    Create emply jsonl file
+    """
+    plan_file = 'plan.jsonl'
+    pth = os.path.join(home, plan_file)
+    with open(pth, 'w') as f:
+        f.write('')
 # _____________________________________________
 
 
