@@ -2,6 +2,7 @@ import os
 import importlib
 
 import click
+import jsonlines
 from jinja2 import Environment, FileSystemLoader
 from pgin.config import Configurator, Config
 conf = Configurator.configure()
@@ -18,6 +19,7 @@ class Migration(object):
         self.logger = logger
         self.conf = conf
         self.home = home
+        self.plan = os.path.join(self.home, 'plan.jsonl')
         self.project = project
         self.project_user = project_user
         self.template_dir = os.path.join(Config.PROJECTDIR, 'templates')
@@ -117,7 +119,7 @@ def init(migration):
     dba.set_search_path()
     dba.cursor.close()
     dba.conn.close()
-    create_plan(home=migration.home)
+    create_plan(migration.plan)
 # _____________________________________________
 
 
@@ -137,13 +139,11 @@ def create_script(migration, direction, name):
 # _____________________________________________
 
 
-def create_plan(home):
+def create_plan(plan):
     """
     Create emply jsonl file
     """
-    plan_file = 'plan.jsonl'
-    pth = os.path.join(home, plan_file)
-    with open(pth, 'w') as f:
+    with open(plan, 'w') as f:
         f.write('')
 # _____________________________________________
 
@@ -157,6 +157,7 @@ def add(migration, name):
     """
     for direction in ['deploy', 'revert']:
         create_script(migration, direction, name)
+        update_plan(migration, name)
 # _____________________________________________
 
 
@@ -183,3 +184,8 @@ def deploy(migration):
     finally:
         conn.close()
 # _____________________________________________
+
+
+def update_plan(migration, name):
+    with jsonlines.open(migration.plan, mode='w') as writer:
+        writer.write({'name': name, 'msg': 'Create application schema'})
