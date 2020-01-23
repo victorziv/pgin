@@ -1,6 +1,5 @@
 import os
 import importlib
-import json
 import click
 import jsonlines
 from jinja2 import Environment, FileSystemLoader
@@ -132,17 +131,6 @@ def init(migration):
 # _____________________________________________
 
 
-def add_to_plan(migration, change):
-    plan_file = '%s.plan' % migration.project
-    plan_path = os.path.join(migration.home, plan_file)
-    with open(plan_path, 'r') as fr:
-        plan = json.load(fr)
-        logger.info("Current plan: %r", plan)
-
-    logger.info("Add %s to %s", change, plan_file)
-# _____________________________________________
-
-
 def create_script(migration, direction, name):
     template_file = '%s.tmpl' % direction
     script_file = '%s.py' % name
@@ -178,7 +166,7 @@ def add(migration, change, msg):
     """
     for direction in ['deploy', 'revert']:
         create_script(migration, direction, change)
-        update_plan(migration, change, msg)
+    update_plan(migration, change, msg)
 # _____________________________________________
 
 
@@ -208,5 +196,5 @@ def deploy(migration):
 
 
 def update_plan(migration, change, msg):
-    with jsonlines.open(migration.plan, mode='w') as writer:
+    with jsonlines.open(migration.plan, mode='a') as writer:
         writer.write({'change': change, 'msg': msg})
