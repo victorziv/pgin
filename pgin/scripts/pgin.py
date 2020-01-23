@@ -170,14 +170,15 @@ def create_plan(plan):
 
 @cli.command()
 @click.argument('change')
+@click.option('-m', '--msg', required=True, help="Short migration description")
 @pass_migration
-def add(migration, change):
+def add(migration, change, msg):
     """
     Adds migration script to the plan
     """
     for direction in ['deploy', 'revert']:
         create_script(migration, direction, change)
-        update_plan(migration, change)
+        update_plan(migration, change, msg)
 # _____________________________________________
 
 
