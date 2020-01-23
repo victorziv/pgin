@@ -20,7 +20,8 @@ setup(
     install_requires=[
         'jinja2',
         'psycopg2-binary',
-        'click'
+        'click',
+        'jsonlines'
     ],
 
     entry_points='''

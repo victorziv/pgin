@@ -2,6 +2,7 @@ import os
 import importlib
 import json
 import click
+import jsonlines
 from jinja2 import Environment, FileSystemLoader
 from pgin.config import Configurator, Config
 conf = Configurator.configure()
@@ -18,6 +19,7 @@ class Migration(object):
         self.logger = logger
         self.conf = conf
         self.home = home
+        self.plan = os.path.join(self.home, 'plan.jsonl')
         self.project = project
         self.project_user = project_user
         self.template_dir = os.path.join(Config.PROJECTDIR, 'templates')
@@ -111,8 +113,6 @@ def init(migration):
     create_directory(migration.home)
     turn_to_python_package(migration.home)
 
-    create_plan(migration, plan_file, plan_path)
-
     for d in ['deploy', 'revert']:
         create_directory(os.path.join(migration.home, d))
         logger.info("Created %s/", d)
@@ -125,9 +125,10 @@ def init(migration):
     dba.cursor = dba.conn.cursor()
     dba.create_meta_schema()
     dba.create_changes_table()
-
+    dba.set_search_path()
     dba.cursor.close()
     dba.conn.close()
+    create_plan(migration.plan)
 # _____________________________________________
 
 
@@ -139,19 +140,6 @@ def add_to_plan(migration, change):
         logger.info("Current plan: %r", plan)
 
     logger.info("Add %s to %s", change, plan_file)
-# _____________________________________________
-
-
-def create_plan(migration, plan_file, plan_path):
-    plan_file = '%s.plan' % migration.project
-    pland = {
-        'project': migration.project,
-        'changes': []
-    }
-    with open(plan_path, 'w') as fw:
-        json.dump(pland, fw, indent=4)
-
-    logger.info("Created %s", plan_file)
 # _____________________________________________
 
 
@@ -171,6 +159,15 @@ def create_script(migration, direction, name):
 # _____________________________________________
 
 
+def create_plan(plan):
+    """
+    Create emply jsonl file
+    """
+    with open(plan, 'w') as f:
+        f.write('')
+# _____________________________________________
+
+
 @cli.command()
 @click.argument('change')
 @pass_migration
@@ -180,8 +177,7 @@ def add(migration, change):
     """
     for direction in ['deploy', 'revert']:
         create_script(migration, direction, change)
-
-    add_to_plan(migration, change)
+        update_plan(migration, change)
 # _____________________________________________
 
 
@@ -208,3 +204,8 @@ def deploy(migration):
     finally:
         conn.close()
 # _____________________________________________
+
+
+def update_plan(migration, change, msg):
+    with jsonlines.open(migration.plan, mode='w') as writer:
+        writer.write({'change': change, 'msg': msg})
