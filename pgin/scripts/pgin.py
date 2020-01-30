@@ -1,4 +1,5 @@
 import os
+import sys
 import importlib
 import click
 import jsonlines
@@ -164,9 +165,11 @@ def add(migration, change, msg):
     """
     Adds migration script to the plan
     """
+
+    validate_not_exists(migration, change)
+    update_plan(migration, change, msg)
     for direction in ['deploy', 'revert']:
         create_script(migration, direction, change)
-    update_plan(migration, change, msg)
 # _____________________________________________
 
 
@@ -198,3 +201,12 @@ def deploy(migration):
 def update_plan(migration, change, msg):
     with jsonlines.open(migration.plan, mode='a') as writer:
         writer.write({'change': change, 'msg': msg})
+# _____________________________________________
+
+
+def validate_not_exists(migration, change):
+    with jsonlines.open(migration.plan, mode='r') as reader:
+        for l in reader:
+            if l['change'] == change:
+                print('Change "%r" already exists in %s' % (change, migration.plan))
+                sys.exit(0)
