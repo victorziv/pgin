@@ -142,7 +142,7 @@ def create_script(migration, direction, name):
     }
     code = tmpl.render(params)
     with open(script_path, 'w') as fw:
-        fw.write(code.strip())
+        fw.write("%s\n" % code)
 
     logger.info("Created script: %r", os.path.join(direction, script_file))
 # _____________________________________________
@@ -165,9 +165,9 @@ def update_plan(migration, change, msg):
 
 def script_already_exists(migration, direction, script_name):
 
+    os.chdir(migration.home)
     script_file = '%s.py' % script_name
-    script_path = os.path.join(migration.home, direction, script_file)
-    print(script_path)
+    script_path = '%s/%s' % (direction, script_file)
     if os.path.exists(script_path):
         print("Script {} already exists".format(script_path))
         return True
@@ -194,6 +194,7 @@ def add(migration, change, msg):
     Adds migration script to the plan
     """
 
+    os.chdir(migration.home)
     validate_plan_record_not_exists(migration, change)
     update_plan(migration, change, msg)
     for direction in ['deploy', 'revert']:
