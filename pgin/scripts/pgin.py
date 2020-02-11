@@ -142,7 +142,7 @@ def create_script(migration, direction, name):
     }
     code = tmpl.render(params)
     with open(script_path, 'w') as fw:
-        fw.write(code)
+        fw.write(code.strip())
 
     logger.info("Created script: %r", os.path.join(direction, script_file))
 # _____________________________________________
@@ -157,6 +157,34 @@ def create_plan(plan):
 # _____________________________________________
 
 
+def update_plan(migration, change, msg):
+    with jsonlines.open(migration.plan, mode='a') as writer:
+        writer.write({'change': change, 'msg': msg})
+# _____________________________________________
+
+
+def script_already_exists(migration, direction, script_name):
+
+    script_file = '%s.py' % script_name
+    script_path = os.path.join(migration.home, direction, script_file)
+    print(script_path)
+    if os.path.exists(script_path):
+        print("Script {} already exists".format(script_path))
+        return True
+    return False
+# _____________________________________________
+
+
+def validate_plan_record_not_exists(migration, change):
+    with jsonlines.open(migration.plan, mode='r') as reader:
+        for l in reader:
+            if l['change'] == change:
+                print('Change %r already exists in %s' % (change, migration.plan))
+                sys.exit(0)
+
+# ============= Commands ==================
+
+
 @cli.command()
 @click.argument('change')
 @click.option('-m', '--msg', required=True, help="Short migration description")
@@ -166,10 +194,11 @@ def add(migration, change, msg):
     Adds migration script to the plan
     """
 
-    validate_not_exists(migration, change)
+    validate_plan_record_not_exists(migration, change)
     update_plan(migration, change, msg)
     for direction in ['deploy', 'revert']:
-        create_script(migration, direction, change)
+        if not script_already_exists(migration, direction, change):
+            create_script(migration, direction, change)
 # _____________________________________________
 
 
@@ -196,17 +225,3 @@ def deploy(migration):
     finally:
         conn.close()
 # _____________________________________________
-
-
-def update_plan(migration, change, msg):
-    with jsonlines.open(migration.plan, mode='a') as writer:
-        writer.write({'change': change, 'msg': msg})
-# _____________________________________________
-
-
-def validate_not_exists(migration, change):
-    with jsonlines.open(migration.plan, mode='r') as reader:
-        for l in reader:
-            if l['change'] == change:
-                print('Change "%r" already exists in %s' % (change, migration.plan))
-                sys.exit(0)
