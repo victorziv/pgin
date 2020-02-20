@@ -19,4 +19,3 @@ class {{ name.capitalize() }}(Basemigration):
         except Exception:
             self.conn.rollback()
             raise
-        # ______________________________________
