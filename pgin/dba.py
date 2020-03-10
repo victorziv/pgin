@@ -92,9 +92,20 @@ class DBAdmin:
             admin_conn = self.connectdb(admin_db_uri)
             admin_cursor = admin_conn.cursor()
             admin_conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+
+            # Create DB
             query = """CREATE DATABASE %(dbname)s WITH OWNER %(user)s"""
             params = {'dbname': AsIs(newdb), 'user': AsIs(newdb_owner)}
             admin_cursor.execute(query, params)
+
+            # Set search_path
+            query = """
+                ALTER DATABASE %(dbname)s
+                SET search_path TO %(dbname)s,public;
+            """
+            params = {'dbname': AsIs(newdb), 'user': AsIs(newdb)}
+            admin_cursor.execute(query, params)
+
         except psycopg2.ProgrammingError as pe:
             if 'already exists' in repr(pe):
                 pass

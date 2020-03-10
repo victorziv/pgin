@@ -125,7 +125,6 @@ def init(migration):
     dba.cursor = dba.conn.cursor()
     dba.create_meta_schema()
     dba.create_changes_table()
-#     dba.set_search_path()
     dba.cursor.close()
     dba.conn.close()
     create_plan(migration.plan)
@@ -222,7 +221,32 @@ def deploy(migration):
         logger.info("+ %s %s ok", module_name, '.' * 30)
         deploy()
     except Exception:
-        logger.exception("Migration exception")
+        logger.exception("Exception in deploy")
+    finally:
+        conn.close()
+# _____________________________________________
+
+
+@cli.command()
+@pass_migration
+def revert(migration):
+    """
+    Revert deployed
+    """
+
+    try:
+        module_name = 'appschema'
+        mod = importlib.import_module('%s.revert.%s' % (conf['MIGRATIONS_PKG'], module_name))
+        revert_cls = getattr(mod, module_name.capitalize())
+        dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
+        dburi = Config.db_connection_uri(migration.project, migration.project_user)
+        logger.info('Deploying changes to: %s', dburi)
+        conn = dba.connectdb(dburi)
+        revert = revert_cls(project=migration.project, project_user=migration.project_user, conn=conn)
+        logger.info("+ %s %s ok", module_name, '.' * 30)
+        revert()
+    except Exception:
+        logger.exception("Exception in revert")
     finally:
         conn.close()
 # _____________________________________________
