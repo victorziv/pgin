@@ -1,13 +1,16 @@
-from pgin.lib.basemigration import Basemigration
+from lib.basemigration import Basemigration
 # =========================================
 
 
-class {{ name.capitalize() }}(Basemigration):
+class Appchema(Basemigration):
     """
-        Migration revert/{{ name }}
+    Migration deploy/appchema
     """
-
     def __call__(self):
+
+        """
+        Migration deploy/appchema
+        """
 
         query = """
         """
@@ -19,3 +22,10 @@ class {{ name.capitalize() }}(Basemigration):
         except Exception:
             self.conn.rollback()
             raise
+        # ______________________________________
+
+
+# ==============================
+
+def deploy(conn):
+    Appchema(conn)()

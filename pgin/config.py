@@ -2,7 +2,7 @@ import os
 import sys
 import datetime
 import logging
-from lib.helpers import create_directory
+from pgin.lib.helpers import create_directory
 
 logger = None
 conf = None
@@ -18,40 +18,44 @@ def get_version(directory):
 
 
 class Config:
-    LOGGER_NAME = 'postmig'
-    PROJECT_USER = 'ivtapp'
+    LOGGER_NAME = 'pgin'
 
     PROJECTDIR = os.path.abspath(os.path.dirname(__file__))
     ROOTDIR = os.path.dirname(PROJECTDIR)
     LOGDIR = os.path.join(ROOTDIR, 'logs')
     DOCDIR = os.path.join(ROOTDIR, 'docs')
+    MIGRATIONS_PKG = 'dbmigration'
 
     VERSION = get_version(PROJECTDIR)
 
     DBHOST = 'localhost'
     DBPORT = 5432
-    DBUSER = PROJECT_USER
-    DBPASSWORD = PROJECT_USER
 
     DB_CONNECTION_PARAMS = dict(
         dbhost=DBHOST,
         dbport=DBPORT,
-        dbuser=DBUSER,
-        dbpassword=DBPASSWORD
     )
 
-    DB_URI_FORMAT = 'postgresql://{dbuser}:{dbpassword}@{dbhost}:{dbport}/{dbname}'
+#     DB_URI_FORMAT = 'postgresql://{dbuser}:{dbpassword}@{dbhost}:{dbport}/{dbname}'
+    DB_URI_FORMAT = 'postgresql://{dbuser}@{dbhost}:{dbport}/{dbname}'
     # _____________________________
 
     @classmethod
-    def db_connection_uri(cls, dbname):
-        return cls.DB_URI_FORMAT.format(dbname=dbname, **cls.DB_CONNECTION_PARAMS)
+    def db_connection_uri(cls, dbname, dbuser):
+        return cls.DB_URI_FORMAT.format(
+            dbname=dbname,
+            dbuser=dbuser,
+            **cls.DB_CONNECTION_PARAMS
+        )
     # _____________________________
 
     @classmethod
-    def db_connection_uri_admin(cls):
-        dbname_admin = 'postgres'
-        return cls.DB_URI_FORMAT.format(dbname=dbname_admin, **cls.DB_CONNECTION_PARAMS)
+    def db_connection_uri_admin(cls, dbuser):
+        dbname_admin = 'template1'
+        return cls.DB_URI_FORMAT.format(
+            dbname=dbname_admin,
+            dbuser=dbuser,
+            **cls.DB_CONNECTION_PARAMS)
 
     # _____________________________
 
@@ -124,7 +128,6 @@ class Configurator:
 
     @classmethod
     def log_to_console(cls, logging_level='INFO', out_to='stderr'):
-#         logformat = '%(asctime)s - %(levelname)-10s %(message)s'
         logformat = '%(message)s'
         handler = logging.StreamHandler(getattr(sys, out_to))
         handler.setLevel(getattr(logging, logging_level.upper()))

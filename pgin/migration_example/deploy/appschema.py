@@ -13,9 +13,10 @@ class Appschema(Basemigration):
         """
 
         query = """
+            CREATE SCHEMA %s
         """
 
-        params = []
+        params = [self.project]
         try:
             self.cursor.execute(query, params)
             self.conn.commit()

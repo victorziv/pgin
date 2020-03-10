@@ -1,6 +1,6 @@
 #!/bin/bash
 
-APP=${1:-tarzan}
+APP=${1:-pgin}
 ROOTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 VENVDIR="$ROOTDIR/venv${APP}"
 # _________________________
