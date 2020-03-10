@@ -102,8 +102,8 @@ def init(migration):
         Initiates the project DB migrations.
     """
 
-    plan_file = '%s.plan' % migration.project
-    plan_path = os.path.join(migration.home, plan_file)
+    plan_path = migration.plan
+    logger.debug("Migration plan path: %r", plan_path)
     if os.path.exists(plan_path):
         logger.info("Project %s migration facility already initiated", migration.project)
         return
