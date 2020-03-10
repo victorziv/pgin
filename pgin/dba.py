@@ -1,7 +1,7 @@
 import os
 import importlib
 import psycopg2
-# from psycopg2.extras import DictCursor
+from psycopg2.extras import DictCursor
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT, AsIs
 from pgin.config import Config, logger  # noqa
 # ========================================
@@ -15,9 +15,6 @@ class DBAdmin:
         self.dbname = dbname
         self.dbuser = dbuser
         self.meta_schema = 'pgin'
-#         self.createdb(newdb=dbname, newdb_owner=self.dbuser)
-#         dburi = Config.db_connection_uri(dbname, dbuser)
-#         self.conn, self.cursor = self.connectdb(dburi)
     # __________________________________________
 
     def already_applied(self, cursor, version):
@@ -169,7 +166,8 @@ class DBAdmin:
 
     def downgradedb(self, db):
         try:
-            self.conn, self.cursor = self.connectdb(self.conf['DB_CONN_URI'])
+            self.conn = self.connectdb(self.conf['DB_CONN_URI'])
+            self.cursor = self.conn.cursor()
             migration_file = '0001.create_table-installationstep.sql'
             f = open(os.path.join(self.conf['MIGRATIONS_DIR'], migration_file))
             self.cursor.execute(f.read())
@@ -189,7 +187,8 @@ class DBAdmin:
 
         self.logger.info("Dropping DB: {}".format(dbname))
         try:
-            admin_conn, admin_cursor = self.connectdb(self.conf['DB_CONN_URI_ADMIN'])
+            admin_conn = self.connectdb(self.conf['DB_CONN_URI_ADMIN'])
+            admin_cursor = admin_conn.cursor()
             admin_conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
             self.disconnect_all_from_db(admin_cursor, dbname)
 
@@ -203,7 +202,8 @@ class DBAdmin:
 
     def grant_connect_to_db(self):
         try:
-            conn, cursor = self.connectdb(self.conf['DB_CONN_URI_ADMIN'])
+            conn = self.connectdb(self.conf['DB_CONN_URI_ADMIN'])
+            cursor = conn.cursor()
             conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
             query = """
                 GRANT CONNECT ON DATABASE %s TO %s
@@ -225,18 +225,19 @@ class DBAdmin:
     # ___________________________
 
     def init_app(self, app):
-        self.conn, self.cursor = self.connectdb(app.config['DB_CONN_URI'])
+        self.conn = self.connectdb(app.config['DB_CONN_URI'])
+        self.cursor = self.conn.cursor(cursor_factory=DictCursor)
         self.show_search_path()
         app.db = self
         return app
     # _____________________________
 
-    def set_search_path(self):
+    def set_search_path(self, schema):
         query = """
             ALTER DATABASE %s
             SET search_path=%s,public
         """
-        params = (AsIs(self.dbname), AsIs(self.dbname))
+        params = (AsIs(schema), AsIs(schema))
         self.cursor.execute(query, params)
         self.conn.commit()
     # _____________________________
@@ -275,7 +276,8 @@ class DBAdmin:
     def revoke_connect_from_db(self, dbname, dbuser):
         try:
             dburi = Config.db_connection_uri(dbname, dbuser)
-            conn, cursor = self.connectdb(dburi)
+            conn = self.connectdb(dburi)
+            cursor = conn.cursor()
             conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
             query = """
                 REVOKE CONNECT ON DATABASE %s FROM %s
@@ -295,68 +297,3 @@ class DBAdmin:
             if conn:
                 conn.close()
     # ___________________________________________
-
-#     def upgradedb(self, upto_version):
-#         self.logger.info("DB upgrade up to version: {}".format(upto_version))
-#         versions = self.get_upgrade_versions(upto_version)
-#         self.apply_versions(versions)
-    # _____________________________
-
-#     def insert_changelog_record(self, version_number, name):
-
-#         try:
-#             conn, cursor = self.connectdb(self.conf['DB_CONN_URI'])
-
-#             query = """
-#                 INSERT INTO changelog
-#                 (version, name, applied)
-#                 VALUES (%s, %s, %s)
-#                 RETURNING id
-#             """
-#             params = (version_number, name, datetime.datetime.utcnow())
-
-#             cursor.execute(query, params)
-#             conn.commit()
-#             fetch = cursor.fetchone()
-#             return fetch['id']
-
-#         except Exception as e:
-#             self.logger.exception('ERROR: %s; rolling back' % e)
-#             conn.rollback()
-#             return
-    # ____________________________
-
-#     def get_upgrade_versions(self, version):
-
-#         # --------------------------
-#         def _compose_version(vfile):
-#             module = os.path.splitext(os.path.basename(vfile))[0]
-#             version, name = module.split('_', 1)
-#             return dict(name=name, module=module, version=version)
-#         # --------------------------
-
-#         versions_path = os.path.join(self.conf['PROJECT_DIR'], self.conf['MIGRATIONS_DIR'])
-#         self.logger.debug("Versions path: {}".format(versions_path))
-#         vfiles = glob.iglob(os.path.join(versions_path, '[0-9]*.py'))
-#         versions = sorted(
-#             [_compose_version(vfile) for vfile in vfiles],
-#             key=lambda x: int(x['version'])
-#         )
-#         self.logger.debug("Versions: {}".format(versions))
-#         if version:
-#             return [v for v in versions if v['version'] == version]
-#         return versions
-    # ___________________________
-
-#     def prompt(self, question):
-#         from distutils.util import strtobool
-
-#         sys.stdout.write('{} [y/n]: '.format(question))
-#         val = input()
-#         try:
-#             ret = strtobool(val)
-#         except ValueError:
-#             sys.stdout.write('Please answer with a y/n\n')
-#             return self.prompt(question)
-
-#         return ret

@@ -1,5 +1,1 @@
 .
-flake8
-pyflakes
-ipython
-psutil

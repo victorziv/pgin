@@ -1,6 +1,6 @@
 import os
+import sys
 import importlib
-
 import click
 import jsonlines
 from jinja2 import Environment, FileSystemLoader
@@ -102,11 +102,20 @@ def init(migration):
         Initiates the project DB migrations.
     """
 
-    click.echo('Initiating project %s migrations on path %s' % (migration.project, migration.home))
+    plan_file = '%s.plan' % migration.project
+    plan_path = os.path.join(migration.home, plan_file)
+    if os.path.exists(plan_path):
+        logger.info("Project %s migration facility already initiated", migration.project)
+        return
+
+    logger.info('Initiating project %s migrations', migration.project)
+    logger.info('Migration container path: %s', migration.home)
     create_directory(migration.home)
     turn_to_python_package(migration.home)
+
     for d in ['deploy', 'revert']:
         create_directory(os.path.join(migration.home, d))
+        logger.info("Created %s/", d)
         turn_to_python_package(os.path.join(migration.home, d))
 
     dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
@@ -116,7 +125,7 @@ def init(migration):
     dba.cursor = dba.conn.cursor()
     dba.create_meta_schema()
     dba.create_changes_table()
-    dba.set_search_path()
+#     dba.set_search_path()
     dba.cursor.close()
     dba.conn.close()
     create_plan(migration.plan)
@@ -133,7 +142,7 @@ def create_script(migration, direction, name):
     }
     code = tmpl.render(params)
     with open(script_path, 'w') as fw:
-        fw.write(code)
+        fw.write("%s\n" % code)
 
     logger.info("Created script: %r", os.path.join(direction, script_file))
 # _____________________________________________
@@ -148,16 +157,49 @@ def create_plan(plan):
 # _____________________________________________
 
 
+def update_plan(migration, change, msg):
+    with jsonlines.open(migration.plan, mode='a') as writer:
+        writer.write({'change': change, 'msg': msg})
+# _____________________________________________
+
+
+def script_already_exists(migration, direction, script_name):
+
+    os.chdir(migration.home)
+    script_file = '%s.py' % script_name
+    script_path = '%s/%s' % (direction, script_file)
+    if os.path.exists(script_path):
+        print("Script {} already exists".format(script_path))
+        return True
+    return False
+# _____________________________________________
+
+
+def validate_plan_record_not_exists(migration, change):
+    with jsonlines.open(migration.plan, mode='r') as reader:
+        for l in reader:
+            if l['change'] == change:
+                print('Change %r already exists in %s' % (change, migration.plan))
+                sys.exit(0)
+
+# ============= Commands ==================
+
+
 @cli.command()
-@click.argument('name')
+@click.argument('change')
+@click.option('-m', '--msg', required=True, help="Short migration description")
 @pass_migration
-def add(migration, name):
+def add(migration, change, msg):
     """
     Adds migration script to the plan
     """
+
+    os.chdir(migration.home)
+    validate_plan_record_not_exists(migration, change)
+    update_plan(migration, change, msg)
     for direction in ['deploy', 'revert']:
-        create_script(migration, direction, name)
-        update_plan(migration, name)
+        if not script_already_exists(migration, direction, change):
+            create_script(migration, direction, change)
 # _____________________________________________
 
 
@@ -168,15 +210,15 @@ def deploy(migration):
     Deploys undeployed
     """
 
-    module_name = 'appschema'
-    mod = importlib.import_module('%s.deploy.%s' % (conf['MIGRATIONS_PKG'], module_name))
-    deploy_cls = getattr(mod, module_name.capitalize())
-    dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
-    dburi = Config.db_connection_uri(migration.project, migration.project_user)
-    logger.info('Deploying changes to: %s', dburi)
-    conn = dba.connectdb(dburi)
-    deploy = deploy_cls(project=migration.project, project_user=migration.project_user, conn=conn)
     try:
+        module_name = 'appschema'
+        mod = importlib.import_module('%s.deploy.%s' % (conf['MIGRATIONS_PKG'], module_name))
+        deploy_cls = getattr(mod, module_name.capitalize())
+        dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
+        dburi = Config.db_connection_uri(migration.project, migration.project_user)
+        logger.info('Deploying changes to: %s', dburi)
+        conn = dba.connectdb(dburi)
+        deploy = deploy_cls(project=migration.project, project_user=migration.project_user, conn=conn)
         logger.info("+ %s %s ok", module_name, '.' * 30)
         deploy()
     except Exception:
@@ -184,8 +226,3 @@ def deploy(migration):
     finally:
         conn.close()
 # _____________________________________________
-
-
-def update_plan(migration, name):
-    with jsonlines.open(migration.plan, mode='w') as writer:
-        writer.write({'name': name, 'msg': 'Create application schema'})

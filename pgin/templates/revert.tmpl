@@ -1,4 +1,4 @@
-from lib.basemigration import Basemigration
+from pgin.lib.basemigration import Basemigration
 # =========================================
 
 
@@ -19,4 +19,3 @@ class {{ name.capitalize() }}(Basemigration):
         except Exception:
             self.conn.rollback()
             raise
-        # ______________________________________
