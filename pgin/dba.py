@@ -1,5 +1,5 @@
-import os
 import logging
+import datetime
 import importlib
 import psycopg2
 from psycopg2.extras import DictCursor
@@ -143,7 +143,6 @@ class DBAdmin:
     def connectdb(self, dburi):
         try:
             conn = psycopg2.connect(dburi)
-#             cursor = conn.cursor(cursor_factory=DictCursor)
             return conn
 
         except psycopg2.OperationalError as e:
@@ -175,21 +174,34 @@ class DBAdmin:
         self.conn.commit()
     # _____________________________
 
-    def downgradedb(self, db):
-        try:
-            self.conn = self.connectdb(self.conf['DB_CONN_URI'])
-            self.cursor = self.conn.cursor()
-            migration_file = '0001.create_table-installationstep.sql'
-            f = open(os.path.join(self.conf['MIGRATIONS_DIR'], migration_file))
-            self.cursor.execute(f.read())
-            self.conn.commit()
-        except Exception:
-            self.conn.rollback()
-            return
-        finally:
-            f.close()
-            self.cursor.close()
-            self.conn.close()
+    def apply_change(self, changeid, change):
+        query = """
+            INSERT INTO %s.changes
+            (changeid, name, applied)
+            VALUES
+            (%s, %s, %s)
+        """
+        params = [AsIs(self.meta_schema), changeid, change, datetime.datetime.utcnow()]
+
+        self.cursor.execute(query, params)
+        self.conn.commit()
+    # _____________________________
+
+#     def downgradedb(self, db):
+#         try:
+#             self.conn = self.connectdb(self.conf['DB_CONN_URI'])
+#             self.cursor = self.conn.cursor()
+#             migration_file = '0001.create_table-installationstep.sql'
+#             f = open(os.path.join(self.conf['MIGRATIONS_DIR'], migration_file))
+#             self.cursor.execute(f.read())
+#             self.conn.commit()
+#         except Exception:
+#             self.conn.rollback()
+#             return
+#         finally:
+#             f.close()
+#             self.cursor.close()
+#             self.conn.close()
     # _____________________________
 
     def dropdb(self, dbname=None):
@@ -262,13 +274,6 @@ class DBAdmin:
 
         return fetch['search_path']
     # _____________________________
-
-    def insert_initial_data(self, app):
-        app_context = app.app_context()
-        app_context.push()
-        from models import Role
-        Role.insert_roles()
-    # __________________________________
 
     def resetdb(self, dbname, logger=None):
 
