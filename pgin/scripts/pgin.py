@@ -4,9 +4,17 @@ import importlib
 import click
 import jsonlines
 from jinja2 import Environment, FileSystemLoader
-from pgin.config import Configurator, Config
-conf = Configurator.configure()
-logger = Configurator.set_logging(name=conf['LOGGER_NAME'], console_logging=True)
+
+from config import Config, Configurator
+runtype = os.getenv('%s_CONFIG' % Config.PROJECT.upper())
+if runtype is None:
+    print("ERROR: $%s_CONFIG env. variable is not set" % Config.PROJECT.upper())
+    sys.exit(1)
+
+conf = Configurator.configure(config_type=runtype)
+
+from lib import applogging  # noqa 
+logger = applogging.set_frontend_logger(conf['PROJECT'])
 
 from pgin.lib.helpers import create_directory  # noqa
 from pgin.dba import DBAdmin  # noqa
@@ -102,8 +110,8 @@ def init(migration):
         Initiates the project DB migrations.
     """
 
-    plan_file = '%s.plan' % migration.project
-    plan_path = os.path.join(migration.home, plan_file)
+    plan_path = migration.plan
+    logger.debug("Migration plan path: %r", plan_path)
     if os.path.exists(plan_path):
         logger.info("Project %s migration facility already initiated", migration.project)
         return
@@ -125,7 +133,6 @@ def init(migration):
     dba.cursor = dba.conn.cursor()
     dba.create_meta_schema()
     dba.create_changes_table()
-#     dba.set_search_path()
     dba.cursor.close()
     dba.conn.close()
     create_plan(migration.plan)
@@ -159,7 +166,10 @@ def create_plan(plan):
 
 def update_plan(migration, change, msg):
     with jsonlines.open(migration.plan, mode='a') as writer:
-        writer.write({'change': change, 'msg': msg})
+        writer.write({
+            'change': change,
+            'msg': msg,
+        })
 # _____________________________________________
 
 
@@ -179,7 +189,7 @@ def validate_plan_record_not_exists(migration, change):
     with jsonlines.open(migration.plan, mode='r') as reader:
         for l in reader:
             if l['change'] == change:
-                print('Change %r already exists in %s' % (change, migration.plan))
+                print('Change %r already exists' % (change, migration.plan))
                 sys.exit(0)
 
 # ============= Commands ==================
@@ -212,17 +222,62 @@ def deploy(migration):
 
     try:
         module_name = 'appschema'
-        mod = importlib.import_module('%s.deploy.%s' % (conf['MIGRATIONS_PKG'], module_name))
+        mod = importlib.import_module('%s.deploy.%s' % (conf['DBMIGRATION_PKG'], module_name))
         deploy_cls = getattr(mod, module_name.capitalize())
         dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
         dburi = Config.db_connection_uri(migration.project, migration.project_user)
         logger.info('Deploying changes to: %s', dburi)
         conn = dba.connectdb(dburi)
-        deploy = deploy_cls(project=migration.project, project_user=migration.project_user, conn=conn)
+        deploy = deploy_cls(
+            project=migration.project,
+            project_user=migration.project_user,
+            conf=migration.conf,
+            conn=conn
+        )
         logger.info("+ %s %s ok", module_name, '.' * 30)
         deploy()
     except Exception:
-        logger.exception("Migration exception")
+        logger.exception("Exception in deploy")
+    finally:
+        conn.close()
+# _____________________________________________
+
+
+def not_revert_if_false(ctx, param, value):
+    if not value:
+        click.echo("Nothing reverted")
+        ctx.exit()
+# _____________________________________________
+
+
+@cli.command()
+@click.option(
+    '-y', '--yes', is_flag=True, default=True, show_default='Yes',
+    callback=not_revert_if_false, expose_value=False, prompt='Revert?')
+@pass_migration
+def revert(migration):
+    """
+    Revert deployed
+    """
+
+    try:
+        module_name = 'appschema'
+        mod = importlib.import_module('%s.revert.%s' % (conf['DBMIGRATION_PKG'], module_name))
+        revert_cls = getattr(mod, module_name.capitalize())
+        dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
+        dburi = Config.db_connection_uri(migration.project, migration.project_user)
+        logger.info('Reverting all changes from %s', migration.project)
+        conn = dba.connectdb(dburi)
+        revert = revert_cls(
+            project=migration.project,
+            project_user=migration.project_user,
+            conf=migration.conf,
+            conn=conn
+        )
+        click.echo(message="- %s %s ok" % (module_name, '.' * 30))
+        revert()
+    except Exception:
+        logger.exception("Exception in revert")
     finally:
         conn.close()
 # _____________________________________________

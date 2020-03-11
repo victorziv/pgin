@@ -1,17 +1,17 @@
 import os
+import logging
 import importlib
 import psycopg2
 from psycopg2.extras import DictCursor
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT, AsIs
-from pgin.config import Config, logger  # noqa
-# ========================================
+# ==============================================================
 
 
 class DBAdmin:
 
     def __init__(self, conf, dbname, dbuser):
-        self.logger = logger
         self.conf = conf
+        self.logger = logging.getLogger(conf['PROJECT'])
         self.dbname = dbname
         self.dbuser = dbuser
         self.meta_schema = 'pgin'
@@ -87,14 +87,25 @@ class DBAdmin:
         self.logger.info("Creating DB %s with owner %s", newdb, newdb_owner)
 
         try:
-            admin_db_uri = Config.db_connection_uri_admin(dbuser=newdb_owner)
+            admin_db_uri = self.conf.db_connection_uri_admin(dbuser=newdb_owner)
             self.logger.info("Admin DB URI: %r", admin_db_uri)
             admin_conn = self.connectdb(admin_db_uri)
             admin_cursor = admin_conn.cursor()
             admin_conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+
+            # Create DB
             query = """CREATE DATABASE %(dbname)s WITH OWNER %(user)s"""
             params = {'dbname': AsIs(newdb), 'user': AsIs(newdb_owner)}
             admin_cursor.execute(query, params)
+
+            # Set search_path
+            query = """
+                ALTER DATABASE %(dbname)s
+                SET search_path TO %(dbname)s,public;
+            """
+            params = {'dbname': AsIs(newdb), 'user': AsIs(newdb)}
+            admin_cursor.execute(query, params)
+
         except psycopg2.ProgrammingError as pe:
             if 'already exists' in repr(pe):
                 pass
@@ -275,7 +286,7 @@ class DBAdmin:
 
     def revoke_connect_from_db(self, dbname, dbuser):
         try:
-            dburi = Config.db_connection_uri(dbname, dbuser)
+            dburi = self.conf.db_connection_uri(dbname, dbuser)
             conn = self.connectdb(dburi)
             cursor = conn.cursor()
             conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
