@@ -1,17 +1,17 @@
 import os
+import logging
 import importlib
 import psycopg2
 from psycopg2.extras import DictCursor
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT, AsIs
-from pgin.config import Config, logger  # noqa
-# ========================================
+# ==============================================================
 
 
 class DBAdmin:
 
     def __init__(self, conf, dbname, dbuser):
-        self.logger = logger
         self.conf = conf
+        self.logger = logging.getLogger(conf['PROJECT'])
         self.dbname = dbname
         self.dbuser = dbuser
         self.meta_schema = 'pgin'
@@ -87,7 +87,7 @@ class DBAdmin:
         self.logger.info("Creating DB %s with owner %s", newdb, newdb_owner)
 
         try:
-            admin_db_uri = Config.db_connection_uri_admin(dbuser=newdb_owner)
+            admin_db_uri = self.conf.db_connection_uri_admin(dbuser=newdb_owner)
             self.logger.info("Admin DB URI: %r", admin_db_uri)
             admin_conn = self.connectdb(admin_db_uri)
             admin_cursor = admin_conn.cursor()
@@ -286,7 +286,7 @@ class DBAdmin:
 
     def revoke_connect_from_db(self, dbname, dbuser):
         try:
-            dburi = Config.db_connection_uri(dbname, dbuser)
+            dburi = self.conf.db_connection_uri(dbname, dbuser)
             conn = self.connectdb(dburi)
             cursor = conn.cursor()
             conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
