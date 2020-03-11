@@ -31,7 +31,8 @@ class Migration(object):
         self.plan = os.path.join(self.home, 'plan.jsonl')
         self.project = project
         self.project_user = project_user
-        self.template_dir = os.path.join(Config.PROJECTDIR, 'templates')
+        pgindir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+        self.template_dir = os.path.join(pgindir, 'templates')
         self.template_env = Environment(loader=FileSystemLoader(self.template_dir))
     # ___________________________________
 
@@ -190,7 +191,7 @@ def validate_plan_record_not_exists(migration, change):
     with jsonlines.open(migration.plan, mode='r') as reader:
         for l in reader:
             if l['change'] == change:
-                print('Change %r already exists' % (change, migration.plan))
+                print('Change %r already exists in migration plan' % change)
                 sys.exit(0)
 
 # ============= Commands ==================
@@ -255,7 +256,7 @@ def not_revert_if_false(ctx, param, value):
 
 
 @cli.command()
-@click.option('--yes', is_flag=True, callback=not_revert_if_false, expose_value=False, prompt='Revert?')
+@click.option('-y', '--yes', is_flag=True, callback=not_revert_if_false, expose_value=False, prompt='Revert?')
 @pass_migration
 def revert(migration):
     """
