@@ -132,7 +132,7 @@ class DBAdmin:
            CREATE TABLE IF NOT EXISTS %s.changes (
                changeid CHAR(40) PRIMARY KEY,
                name VARCHAR(100) UNIQUE,
-               applied TIMESTAMP
+               applied TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL
            );
         """
         params = [AsIs(self.meta_schema)]
