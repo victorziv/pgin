@@ -251,15 +251,12 @@ def not_revert_if_false(ctx, param, value):
 
 
 @cli.command()
-@click.option(
-    '-y', '--yes', is_flag=True, default=True, show_default='Yes',
-    callback=not_revert_if_false, expose_value=False, prompt='Revert?')
+@click.option('--yes', is_flag=True, callback=not_revert_if_false, expose_value=False, prompt='Revert?')
 @pass_migration
 def revert(migration):
     """
     Revert deployed
     """
-
     try:
         module_name = 'appschema'
         mod = importlib.import_module('%s.revert.%s' % (conf['DBMIGRATION_PKG'], module_name))

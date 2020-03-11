@@ -187,23 +187,6 @@ class DBAdmin:
         self.conn.commit()
     # _____________________________
 
-#     def downgradedb(self, db):
-#         try:
-#             self.conn = self.connectdb(self.conf['DB_CONN_URI'])
-#             self.cursor = self.conn.cursor()
-#             migration_file = '0001.create_table-installationstep.sql'
-#             f = open(os.path.join(self.conf['MIGRATIONS_DIR'], migration_file))
-#             self.cursor.execute(f.read())
-#             self.conn.commit()
-#         except Exception:
-#             self.conn.rollback()
-#             return
-#         finally:
-#             f.close()
-#             self.cursor.close()
-#             self.conn.close()
-    # _____________________________
-
     def dropdb(self, dbname=None):
         if dbname is None:
             dbname = self.conf['DBNAME']
