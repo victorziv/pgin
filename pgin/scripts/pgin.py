@@ -1,5 +1,6 @@
 import os
 import sys
+import hashlib
 import importlib
 import click
 import jsonlines
@@ -221,25 +222,28 @@ def deploy(migration):
     """
 
     try:
-        module_name = 'appschema'
-        mod = importlib.import_module('%s.deploy.%s' % (conf['DBMIGRATION_PKG'], module_name))
-        deploy_cls = getattr(mod, module_name.capitalize())
+        change = 'appschema'
+        mod = importlib.import_module('%s.deploy.%s' % (conf['DBMIGRATION_PKG'], change))
+        deploy_cls = getattr(mod, change.capitalize())
         dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
         dburi = Config.db_connection_uri(migration.project, migration.project_user)
         logger.info('Deploying changes to: %s', dburi)
-        conn = dba.connectdb(dburi)
+        dba.conn = dba.connectdb(dburi)
+        dba.cursor = dba.conn.cursor()
         deploy = deploy_cls(
             project=migration.project,
             project_user=migration.project_user,
             conf=migration.conf,
-            conn=conn
+            conn=dba.conn
         )
-        logger.info("+ %s %s ok", module_name, '.' * 30)
         deploy()
+        changeid = hashlib.sha1(change.encode('utf-8')).hexdigest()
+        dba.apply_change(changeid, change)
+        click.echo(message="+ %s %s ok" % (change, '.' * 30))
     except Exception:
         logger.exception("Exception in deploy")
     finally:
-        conn.close()
+        dba.conn.close()
 # _____________________________________________
 
 

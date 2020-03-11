@@ -130,7 +130,7 @@ class DBAdmin:
     def create_changes_table(self):
         query = """
            CREATE TABLE IF NOT EXISTS %s.changes (
-               changeid CHAR(128) PRIMARY KEY,
+               changeid CHAR(40) PRIMARY KEY,
                name VARCHAR(100) UNIQUE,
                applied TIMESTAMP
            );
