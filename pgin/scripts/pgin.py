@@ -5,11 +5,6 @@ import click
 import jsonlines
 from jinja2 import Environment, FileSystemLoader
 
-# from pgin.config import Configurator, Config
-# conf = Configurator.configure()
-# logger = Configurator.set_logging(name=conf['LOGGER_NAME'], console_logging=True)
-
-
 from config import Config, Configurator
 runtype = os.getenv('%s_CONFIG' % Config.PROJECT.upper())
 if runtype is None:
@@ -248,7 +243,16 @@ def deploy(migration):
 # _____________________________________________
 
 
+def exit_if_false(ctx, param, value):
+    if not value:
+        ctx.exit()
+# _____________________________________________
+
+
 @cli.command()
+@click.option(
+    '-y', '--yes', is_flag=True,
+    callback=exit_if_false, expose_value=False, prompt='Are you sure you want to revert?')
 @pass_migration
 def revert(migration):
     """
@@ -263,8 +267,13 @@ def revert(migration):
         dburi = Config.db_connection_uri(migration.project, migration.project_user)
         logger.info('Deploying changes to: %s', dburi)
         conn = dba.connectdb(dburi)
-        revert = revert_cls(project=migration.project, project_user=migration.project_user, conn=conn)
-        logger.info("+ %s %s ok", module_name, '.' * 30)
+        revert = revert_cls(
+            project=migration.project,
+            project_user=migration.project_user,
+            conf=migration.conf,
+            conn=conn
+        )
+        logger.info("- %s %s ok", module_name, '.' * 30)
         revert()
     except Exception:
         logger.exception("Exception in revert")
