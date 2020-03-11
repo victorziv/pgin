@@ -259,6 +259,17 @@ class DBAdmin:
         return fetch['search_path']
     # _____________________________
 
+    def remove_change(self, changeid):
+        query = """
+            DELETE FROM %s.changes
+            WHERE changeid = %s
+        """
+        params = [AsIs(self.meta_schema), changeid]
+
+        self.cursor.execute(query, params)
+        self.conn.commit()
+    # _____________________________
+
     def resetdb(self, dbname, logger=None):
 
         if logger is None:

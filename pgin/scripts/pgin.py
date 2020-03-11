@@ -263,9 +263,9 @@ def revert(migration):
     Revert deployed
     """
     try:
-        module_name = 'appschema'
-        mod = importlib.import_module('%s.revert.%s' % (conf['DBMIGRATION_PKG'], module_name))
-        revert_cls = getattr(mod, module_name.capitalize())
+        change = 'appschema'
+        mod = importlib.import_module('%s.revert.%s' % (conf['DBMIGRATION_PKG'], change))
+        revert_cls = getattr(mod, change.capitalize())
         dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
         dburi = Config.db_connection_uri(migration.project, migration.project_user)
         logger.info('Reverting all changes from %s', migration.project)
@@ -276,8 +276,10 @@ def revert(migration):
             conf=migration.conf,
             conn=conn
         )
-        click.echo(message="- %s %s ok" % (module_name, '.' * 30))
         revert()
+        changeid = hashlib.sha1(change.encode('utf-8')).hexdigest()
+        dba.remove_change(changeid)
+        click.echo(message="- %s %s ok" % (change, '.' * 30))
     except Exception:
         logger.exception("Exception in revert")
     finally:
