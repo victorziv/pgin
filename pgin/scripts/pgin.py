@@ -158,7 +158,10 @@ def create_plan(plan):
 
 def update_plan(migration, change, msg):
     with jsonlines.open(migration.plan, mode='a') as writer:
-        writer.write({'change': change, 'msg': msg})
+        writer.write({
+            'change': change,
+            'msg': msg,
+        })
 # _____________________________________________
 
 
@@ -178,7 +181,7 @@ def validate_plan_record_not_exists(migration, change):
     with jsonlines.open(migration.plan, mode='r') as reader:
         for l in reader:
             if l['change'] == change:
-                print('Change %r already exists in %s' % (change, migration.plan))
+                print('Change %r already exists' % (change, migration.plan))
                 sys.exit(0)
 
 # ============= Commands ==================
