@@ -4,9 +4,22 @@ import importlib
 import click
 import jsonlines
 from jinja2 import Environment, FileSystemLoader
-from pgin.config import Configurator, Config
-conf = Configurator.configure()
-logger = Configurator.set_logging(name=conf['LOGGER_NAME'], console_logging=True)
+
+# from pgin.config import Configurator, Config
+# conf = Configurator.configure()
+# logger = Configurator.set_logging(name=conf['LOGGER_NAME'], console_logging=True)
+
+
+from config import Config, Configurator
+runtype = os.getenv('%s_CONFIG' % Config.PROJECT.upper())
+if runtype is None:
+    print("ERROR: $%s_CONFIG env. variable is not set" % Config.PROJECT.upper())
+    sys.exit(1)
+
+conf = Configurator.configure(config_type=runtype)
+
+from lib import applogging  # noqa 
+logger = applogging.set_frontend_logger(conf['PROJECT'])
 
 from pgin.lib.helpers import create_directory  # noqa
 from pgin.dba import DBAdmin  # noqa
@@ -214,13 +227,18 @@ def deploy(migration):
 
     try:
         module_name = 'appschema'
-        mod = importlib.import_module('%s.deploy.%s' % (conf['MIGRATIONS_PKG'], module_name))
+        mod = importlib.import_module('%s.deploy.%s' % (conf['DBMIGRATION_PKG'], module_name))
         deploy_cls = getattr(mod, module_name.capitalize())
         dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
         dburi = Config.db_connection_uri(migration.project, migration.project_user)
         logger.info('Deploying changes to: %s', dburi)
         conn = dba.connectdb(dburi)
-        deploy = deploy_cls(project=migration.project, project_user=migration.project_user, conn=conn)
+        deploy = deploy_cls(
+            project=migration.project,
+            project_user=migration.project_user,
+            conf=migration.conf,
+            conn=conn
+        )
         logger.info("+ %s %s ok", module_name, '.' * 30)
         deploy()
     except Exception:
@@ -239,7 +257,7 @@ def revert(migration):
 
     try:
         module_name = 'appschema'
-        mod = importlib.import_module('%s.revert.%s' % (conf['MIGRATIONS_PKG'], module_name))
+        mod = importlib.import_module('%s.revert.%s' % (conf['DBMIGRATION_PKG'], module_name))
         revert_cls = getattr(mod, module_name.capitalize())
         dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
         dburi = Config.db_connection_uri(migration.project, migration.project_user)
