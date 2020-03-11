@@ -243,16 +243,17 @@ def deploy(migration):
 # _____________________________________________
 
 
-def exit_if_false(ctx, param, value):
+def not_revert_if_false(ctx, param, value):
     if not value:
+        click.echo("Nothing reverted")
         ctx.exit()
 # _____________________________________________
 
 
 @cli.command()
 @click.option(
-    '-y', '--yes', is_flag=True,
-    callback=exit_if_false, expose_value=False, prompt='Are you sure you want to revert?')
+    '-y', '--yes', is_flag=True, default=True, show_default='Yes',
+    callback=not_revert_if_false, expose_value=False, prompt='Revert?')
 @pass_migration
 def revert(migration):
     """
@@ -265,7 +266,7 @@ def revert(migration):
         revert_cls = getattr(mod, module_name.capitalize())
         dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
         dburi = Config.db_connection_uri(migration.project, migration.project_user)
-        logger.info('Deploying changes to: %s', dburi)
+        logger.info('Reverting all changes from %s', migration.project)
         conn = dba.connectdb(dburi)
         revert = revert_cls(
             project=migration.project,
@@ -273,7 +274,7 @@ def revert(migration):
             conf=migration.conf,
             conn=conn
         )
-        logger.info("- %s %s ok", module_name, '.' * 30)
+        click.echo(message="- %s %s ok" % (module_name, '.' * 30))
         revert()
     except Exception:
         logger.exception("Exception in revert")
