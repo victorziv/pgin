@@ -1,6 +1,5 @@
 import logging
 import datetime
-import importlib
 import psycopg2
 from psycopg2.extras import DictCursor
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT, AsIs
@@ -18,61 +17,20 @@ class DBAdmin:
         self.meta_schema = 'pgin'
     # __________________________________________
 
-    def already_applied(self, cursor, version):
-        self.logger.debug("Check version applied: %r", version)
-
+    def apply_change(self, changeid, change):
         query = """
-            SELECT EXISTS(
-                SELECT 1 FROM changelog WHERE version = %s
-            )
-
+            INSERT INTO %s.changes
+            (changeid, name, applied)
+            VALUES
+            (%s, %s, %s)
+            ON CONFLICT(changeid)
+            DO NOTHING
         """
-        params = (version,)
+        params = [AsIs(self.meta_schema), changeid, change, datetime.datetime.utcnow()]
 
-        cursor.execute(query, params)
-        fetch = cursor.fetchone()
-        self.logger.debug("Already applied: {}".format(fetch[0]))
-        return fetch[0]
-    # ___________________________
+        self.cursor.execute(query, params)
+        self.conn.commit()
 
-    def apply_versions(self, versions):
-        self.logger.info("==== FOUND VERSIONS: %r", [v['version'] for v in versions])
-        applied = []
-
-        try:
-            self.logger.info("==== CONNECTING TO URI: %r", self.conf['DB_CONN_URI'])
-            conn, cursor = self.connectdb(self.conf['DB_CONN_URI'])
-
-            for ver in versions:
-                if self.already_applied(cursor, ver['version']):
-                    self.logger.info("Version %s already applied - skipping", ver['version'])
-                    continue
-
-                try:
-                    module_name = ver['module']
-                    mod = importlib.import_module('%s.%s' % (self.conf['MIGRATIONS_MODULE'], module_name))
-                    mod.upgrade(conn, cursor)
-                except Exception:
-                    self.logger.exception("!! APPLY VERSIONS EXCEPTION")
-                    conn.rollback()
-                    raise
-                else:
-                    version = ver['version']
-                    name = ver['name']
-                    recordid = self.insert_changelog_record(version, name)
-                    applied.append(version)
-                    self.logger.info("Version %s applied", version)
-                    self.logger.debug("Changelog record ID %s, version %s: %r", recordid, version, ver)
-
-            if not len(applied):
-                self.logger.info("No changes found for the DB")
-
-        except Exception as e:
-            self.logger.error('ERROR: %s; rolling back' % e)
-            conn.rollback()
-        finally:
-            cursor.close()
-            conn.close()
     # _____________________________
 
     def createdb(self, newdb=None, newdb_owner=None):
@@ -175,22 +133,6 @@ class DBAdmin:
         self.conn.commit()
     # _____________________________
 
-    def apply_change(self, changeid, change):
-        query = """
-            INSERT INTO %s.changes
-            (changeid, name, applied)
-            VALUES
-            (%s, %s, %s)
-            ON CONFLICT(changeid)
-            DO NOTHING
-        """
-        params = [AsIs(self.meta_schema), changeid, change, datetime.datetime.utcnow()]
-
-        self.cursor.execute(query, params)
-        self.conn.commit()
-
-    # _____________________________
-
     def dropdb(self, dbname=None):
         if dbname is None:
             dbname = self.conf['DBNAME']
@@ -208,6 +150,24 @@ class DBAdmin:
         finally:
             admin_cursor.close()
             admin_conn.close()
+    # ___________________________
+
+    def fetch_deployed_changes(self):
+        query = """
+            SELECT
+                changeid,
+                name
+            FROM %s.changes
+            ORDER BY applied DESC
+        """
+        params = [AsIs(self.meta_schema)]
+
+        self.cursor.execute(query, params)
+        fetch = self.cursor.fetchall()
+        if fetch is None:
+            return []
+
+        return [dict(f) for f in fetch]
     # ___________________________
 
     def grant_connect_to_db(self):
