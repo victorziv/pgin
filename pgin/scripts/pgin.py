@@ -191,7 +191,7 @@ def validate_plan_record_not_exists(migration, change):
     with jsonlines.open(migration.plan, mode='r') as reader:
         for l in reader:
             if l['change'] == change:
-                print('Change %r already exists in migration plan' % change)
+                click.echo(message='Change {} already exists in migration plan'.format(change))
                 sys.exit(0)
 
 # ============= Commands ==================
@@ -215,6 +215,21 @@ def add(migration, change, msg):
 # _____________________________________________
 
 
+def disconnect_dba(dba):
+    dba.conn.close()
+# _____________________________________________
+
+
+def connect_dba(migration):
+    dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
+    dburi = Config.db_connection_uri(migration.project, migration.project_user)
+    logger.info('Deploying changes to: %s', dburi)
+    dba.conn = dba.connectdb(dburi)
+    dba.cursor = dba.conn.cursor()
+    return dba
+# _____________________________________________
+
+
 @cli.command()
 @pass_migration
 def deploy(migration):
@@ -223,28 +238,42 @@ def deploy(migration):
     """
 
     try:
+        dba = connect_dba(migration)
+
         change = 'appschema'
-        mod = importlib.import_module('%s.deploy.%s' % (conf['DBMIGRATION_PKG'], change))
-        deploy_cls = getattr(mod, change.capitalize())
-        dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
-        dburi = Config.db_connection_uri(migration.project, migration.project_user)
-        logger.info('Deploying changes to: %s', dburi)
-        dba.conn = dba.connectdb(dburi)
-        dba.cursor = dba.conn.cursor()
-        deploy = deploy_cls(
-            project=migration.project,
-            project_user=migration.project_user,
-            conf=migration.conf,
-            conn=dba.conn
-        )
+        click.echo(message="+ %s %s " % (change, '.' * 30), nl=False)
+        deploy, changeid = get_change_deploy(migration, dba, change)
         deploy()
-        changeid = hashlib.sha1(change.encode('utf-8')).hexdigest()
         dba.apply_change(changeid, change)
-        click.echo(message="+ %s %s ok" % (change, '.' * 30))
-    except Exception:
-        logger.exception("Exception in deploy")
+
+        click.echo(click.style('ok', fg='green'))
+
+    except Exception as e:
+        click.echo(click.style('fail', fg='red'))
+        logger.error("Exception in deploy: %s", e)
     finally:
-        dba.conn.close()
+        disconnect_dba(dba)
+# _____________________________________________
+
+
+def get_change_deploy(migration, dba, change):
+    changeid = get_changeid(change)
+    mod = importlib.import_module('%s.deploy.%s' % (conf['DBMIGRATION_PKG'], change))
+    deploy_cls = getattr(mod, change.capitalize())
+
+    deploy = deploy_cls(
+        project=migration.project,
+        project_user=migration.project_user,
+        conf=migration.conf,
+        conn=dba.conn
+    )
+
+    return deploy, changeid
+# _____________________________________________
+
+
+def get_changeid(change):
+    return hashlib.sha1(change.encode('utf-8')).hexdigest()
 # _____________________________________________
 
 

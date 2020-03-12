@@ -181,11 +181,14 @@ class DBAdmin:
             (changeid, name, applied)
             VALUES
             (%s, %s, %s)
+            ON CONFLICT(changeid)
+            DO NOTHING
         """
         params = [AsIs(self.meta_schema), changeid, change, datetime.datetime.utcnow()]
 
         self.cursor.execute(query, params)
         self.conn.commit()
+
     # _____________________________
 
     def dropdb(self, dbname=None):
