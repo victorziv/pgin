@@ -223,7 +223,6 @@ def disconnect_dba(dba):
 def connect_dba(migration):
     dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
     dburi = Config.db_connection_uri(migration.project, migration.project_user)
-    logger.info('Deploying changes to: %s', dburi)
     dba.conn = dba.connectdb(dburi)
     dba.cursor = dba.conn.cursor()
     return dba
@@ -236,6 +235,8 @@ def deploy(migration):
     """
     Deploys undeployed
     """
+
+    logger.info('Deploying changes to %s', migration.project)
 
     try:
         dba = connect_dba(migration)
@@ -284,6 +285,22 @@ def not_revert_if_false(ctx, param, value):
 # _____________________________________________
 
 
+def get_change_revert(migration, dba, change):
+    changeid = get_changeid(change)
+    mod = importlib.import_module('%s.revert.%s' % (conf['DBMIGRATION_PKG'], change))
+    revert_cls = getattr(mod, change.capitalize())
+
+    revert = revert_cls(
+        project=migration.project,
+        project_user=migration.project_user,
+        conf=migration.conf,
+        conn=dba.conn
+    )
+
+    return revert, changeid
+# _____________________________________________
+
+
 @cli.command()
 @click.option('-y', '--yes', is_flag=True, callback=not_revert_if_false, expose_value=False, prompt='Revert?')
 @pass_migration
@@ -291,26 +308,20 @@ def revert(migration):
     """
     Revert deployed
     """
+    logger.info('Reverting all changes from %s', migration.project)
+
     try:
+        dba = connect_dba(migration)
+
         change = 'appschema'
-        mod = importlib.import_module('%s.revert.%s' % (conf['DBMIGRATION_PKG'], change))
-        revert_cls = getattr(mod, change.capitalize())
-        dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
-        dburi = Config.db_connection_uri(migration.project, migration.project_user)
-        logger.info('Reverting all changes from %s', migration.project)
-        conn = dba.connectdb(dburi)
-        revert = revert_cls(
-            project=migration.project,
-            project_user=migration.project_user,
-            conf=migration.conf,
-            conn=conn
-        )
+        click.echo(message="- %s %s " % (change, '.' * 30), nl=False)
+        revert, changeid = get_change_revert(migration, dba, change)
         revert()
-        changeid = hashlib.sha1(change.encode('utf-8')).hexdigest()
         dba.remove_change(changeid)
-        click.echo(message="- %s %s ok" % (change, '.' * 30))
+        click.echo(click.style('ok', fg='green'))
     except Exception:
+        click.echo(click.style('fail', fg='red'))
         logger.exception("Exception in revert")
     finally:
-        conn.close()
+        disconnect_dba(dba)
 # _____________________________________________
