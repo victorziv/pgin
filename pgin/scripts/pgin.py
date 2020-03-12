@@ -241,13 +241,16 @@ def deploy(migration):
     try:
         dba = connect_dba(migration)
 
-        change = 'appschema'
-        click.echo(message="+ %s %s " % (change, '.' * 30), nl=False)
-        deploy, changeid = get_change_deploy(migration, dba, change)
-        deploy()
-        dba.apply_change(changeid, change)
+        with jsonlines.open(migration.plan, mode='r') as reader:
 
-        click.echo(click.style('ok', fg='green'))
+            for l in reader:
+                change = l['change']
+                click.echo(message="+ %s %s " % (change, '.' * 30), nl=False)
+                deploy, changeid = get_change_deploy(migration, dba, change)
+                deploy()
+                dba.apply_change(changeid, change)
+
+                click.echo(click.style('ok', fg='green'))
 
     except Exception as e:
         click.echo(click.style('fail', fg='red'))
