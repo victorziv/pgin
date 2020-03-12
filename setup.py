@@ -21,7 +21,8 @@ setup(
         'jinja2',
         'psycopg2-binary',
         'click',
-        'jsonlines'
+        'jsonlines',
+        'colorama'
     ],
 
     entry_points='''
