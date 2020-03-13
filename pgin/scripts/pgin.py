@@ -20,6 +20,7 @@ logger = applogging.set_frontend_logger(conf['PROJECT'])
 
 from pgin.lib.helpers import create_directory  # noqa
 from pgin.dba import DBAdmin  # noqa
+MSG_LENGTH = 40
 # =====================================
 
 
@@ -240,13 +241,19 @@ def add(migration, change, msg):
 
 
 @cli.command()
+@click.argument('upto', required=False)
 @pass_migration
-def deploy(migration):
+def deploy(migration, upto=None):
     """
     Deploys undeployed
     """
 
-    logger.info('Deploying changes to %s', migration.project)
+    if upto is None:
+        msg = 'Deploying all changes to %s' % migration.project
+    else:
+        msg = 'Deploying changes to %s. Last change to deploy: %s' % (migration.project, upto)
+
+    click.echo(msg)
 
     try:
         dba = connect_dba(migration)
@@ -255,12 +262,14 @@ def deploy(migration):
 
             for l in reader:
                 change = l['change']
-                click.echo(message="+ %s %s " % (change, '.' * 30), nl=False)
+                click.echo(message="+ %s %s " % (change, '.' * (MSG_LENGTH - len(change))), nl=False)
                 deploy, changeid = get_change_deploy(migration, dba, change)
                 deploy()
                 dba.apply_change(changeid, change)
 
                 click.echo(click.style('ok', fg='green'))
+                if change == upto:
+                    break
 
     except Exception as e:
         click.echo(click.style('fail', fg='red'))
@@ -309,12 +318,18 @@ def init(migration):
 
 @cli.command()
 @click.option('-y', '--yes', is_flag=True, callback=not_revert_if_false, expose_value=False, prompt='Revert?')
+@click.argument('downto', required=False)
 @pass_migration
-def revert(migration):
+def revert(migration, downto=None):
     """
     Revert deployed
     """
-    logger.info('Reverting all changes from %s', migration.project)
+    if downto is None:
+        msg = 'Reverting all changes from %s' % migration.project
+    else:
+        msg = 'Reverting changes from %s. Last change to revert: %s' % (migration.project, downto)
+
+    click.echo(msg)
 
     try:
         dba = connect_dba(migration)
@@ -329,6 +344,8 @@ def revert(migration):
             revert()
             dba.remove_change(changeid)
             click.echo(click.style('ok', fg='green'))
+            if change == downto:
+                break
 
     except Exception:
         click.echo(click.style('fail', fg='red'))
