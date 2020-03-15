@@ -21,6 +21,15 @@ logger = applogging.set_frontend_logger(conf['PROJECT'])
 from pgin.lib.helpers import create_directory  # noqa
 from pgin.dba import DBAdmin  # noqa
 MSG_LENGTH = 40
+# _____________________________________________
+
+
+def get_version():
+    rootdir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+    with open(os.path.join(rootdir, 'VERSION')) as fp:
+        version = fp.read()
+
+    return version.strip()
 # =====================================
 
 
@@ -30,7 +39,8 @@ class Migration(object):
         self.logger = logger
         self.conf = conf
         self.home = home
-        self.plan = os.path.join(self.home, 'plan.jsonl')
+        self.plan_name = 'plan.jsonl'
+        self.plan = os.path.join(self.home, self.plan_name)
         self.project = project
         self.project_user = project_user
         pgindir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
@@ -65,6 +75,7 @@ def create_plan(plan):
     """
     Create emply jsonl file
     """
+    click.echo("Creating migration plan: %s", plan)
     with open(plan, 'w') as f:
         f.write('')
 # _____________________________________________
@@ -127,13 +138,45 @@ def not_revert_if_false(ctx, param, value):
 # _____________________________________________
 
 
-def script_already_exists(migration, direction, script_name):
+def remove_from_plan(migration, change):
+    try:
+        fpr = open(migration.plan)
+        reader = jsonlines.Reader(fpr)
+
+        tmp_plan = "tmp-%s" % migration.plan_name
+        tmp_plan_path = os.path.join(os.path.dirname(migration.plan), tmp_plan)
+        fpw = open(tmp_plan_path, 'w')
+        writer = jsonlines.Writer(fpw)
+
+        for l in reader:
+            if l['change'] == change:
+                continue
+            writer.write(l)
+
+    finally:
+        fpr.close()
+        fpw.close()
+        os.rename(tmp_plan_path, migration.plan)
+# _____________________________________________
+
+
+def remove_script(migration, direction, change):
+    os.chdir(migration.home)
+    script_file = '%s.py' % change
+    script_path = '%s/%s' % (direction, script_file)
+    if os.path.exists(script_path):
+        click.echo("Removing script {}".format(script_path))
+        os.remove(script_path)
+# _____________________________________________
+
+
+def script_exists(migration, direction, script_name):
 
     os.chdir(migration.home)
     script_file = '%s.py' % script_name
     script_path = '%s/%s' % (direction, script_file)
     if os.path.exists(script_path):
-        print("Script {} already exists".format(script_path))
+        click.echo("Script {} exists".format(script_path))
         return True
     return False
 # _____________________________________________
@@ -154,12 +197,13 @@ def update_plan(migration, change, msg):
 # _____________________________________________
 
 
-def validate_plan_record_not_exists(migration, change):
+def plan_record_exists(migration, change):
     with jsonlines.open(migration.plan, mode='r') as reader:
         for l in reader:
             if l['change'] == change:
-                click.echo(message='Change {} already exists in migration plan'.format(change))
-                sys.exit(0)
+                return True
+
+    return False
 # _____________________________________________
 
 
@@ -212,7 +256,7 @@ def validate_project_user(ctx, param, value):
     callback=validate_project_user,
     help='Parent project generic user account'
 )
-@click.version_option('0.1.0')
+@click.version_option(get_version())
 @click.pass_context
 def cli(ctx, home, project, project_user):
     """
@@ -232,10 +276,13 @@ def add(migration, change, msg):
     """
 
     os.chdir(migration.home)
-    validate_plan_record_not_exists(migration, change)
+    if plan_record_exists(migration, change):
+        click.echo(message='Change {} already exists in migration plan'.format(change))
+        sys.exit(0)
+
     update_plan(migration, change, msg)
     for direction in ['deploy', 'revert']:
-        if not script_already_exists(migration, direction, change):
+        if not script_exists(migration, direction, change):
             create_script(migration, direction, change)
 # _____________________________________________
 
@@ -281,17 +328,17 @@ def deploy(migration, upto=None):
 
 
 @cli.command()
+@click.option('-f', '--force', is_flag=True, required=False, help="Forcibly re-initiate DB and migration installment")
 @pass_migration
-def init(migration):
+def init(migration, force=False):
     """
         Initiates the project DB migrations.
     """
 
-    plan_path = migration.plan
-    logger.debug("Migration plan path: %r", plan_path)
-    if os.path.exists(plan_path):
+    logger.debug("Migration plan path: %r", migration.plan)
+    if os.path.exists(migration.plan) and not force:
         logger.info("Project %s migration facility already initiated", migration.project)
-        return
+        sys.exit(0)
 
     logger.info('Initiating project %s migrations', migration.project)
     logger.info('Migration container path: %s', migration.home)
@@ -312,7 +359,30 @@ def init(migration):
     dba.create_changes_table()
     dba.cursor.close()
     dba.conn.close()
+
+    if os.path.exists(migration.plan):
+        click.echo("Migration plan %s already exists", migration.plan)
+        sys.exit(0)
+
     create_plan(migration.plan)
+# _____________________________________________
+
+
+@cli.command()
+@click.argument('change', required=True)
+@pass_migration
+def remove(migration, change):
+    """
+    Adds migration script to the plan
+    """
+
+    os.chdir(migration.home)
+    if plan_record_exists(migration, change):
+        click.echo("Removing change %s from migration plan" % change)
+        remove_from_plan(migration, change)
+
+    for direction in ['deploy', 'revert']:
+        remove_script(migration, direction, change)
 # _____________________________________________
 
 
