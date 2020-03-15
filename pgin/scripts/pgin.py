@@ -156,6 +156,7 @@ def remove_from_plan(migration, change):
     finally:
         fpr.close()
         fpw.close()
+        os.rename(tmp_plan_path, migration.plan)
 # _____________________________________________
 
 
