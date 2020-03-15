@@ -144,7 +144,7 @@ def remove_from_plan(migration, change):
         reader = jsonlines.Reader(fpr)
 
         tmp_plan = "tmp-%s" % migration.plan_name
-        tmp_plan_path = os.path.join(os.path.dirname(migration.plan, tmp_plan))
+        tmp_plan_path = os.path.join(os.path.dirname(migration.plan), tmp_plan)
         fpw = open(tmp_plan_path, 'w')
         writer = jsonlines.Writer(fpw)
 
