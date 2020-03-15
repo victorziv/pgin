@@ -32,16 +32,16 @@ class DBAdmin:
         self.conn.commit()
     # _____________________________
 
-    def apply_planned(self, changeid, change):
+    def apply_planned(self, changeid, change, msg):
         query = """
             INSERT INTO %s.plan
-            (changeid, name, planned)
+            (changeid, name, msg, planned)
             VALUES
-            (%s, %s, %s)
+            (%s, %s, %s, %s)
             ON CONFLICT(changeid)
             DO NOTHING
         """
-        params = [AsIs(self.meta_schema), changeid, change, datetime.datetime.utcnow()]
+        params = [AsIs(self.meta_schema), changeid, change, msg, datetime.datetime.utcnow()]
 
         self.cursor.execute(query, params)
         self.conn.commit()
@@ -219,6 +219,22 @@ class DBAdmin:
             return []
 
         return [dict(f) for f in fetch]
+    # ___________________________
+
+    def fetch_deployed_changeid_by_name(self, change):
+        query = """
+            SELECT changeid
+            FROM %s.changes
+            WHERE name = %s
+        """
+        params = [AsIs(self.meta_schema), change]
+
+        self.cursor.execute(query, params)
+        fetch = self.cursor.fetchone()
+        if fetch is None:
+            return
+
+        return dict(fetch)['changeid']
     # ___________________________
 
     def grant_connect_to_db(self):
