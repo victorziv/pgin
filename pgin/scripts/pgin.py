@@ -161,7 +161,12 @@ def remove_from_plan(migration, change):
 
 
 def remove_script(migration, direction, change):
-    pass
+    os.chdir(migration.home)
+    script_file = '%s.py' % change
+    script_path = '%s/%s' % (direction, script_file)
+    if os.path.exists(script_path):
+        click.echo("Removing script {}".format(script_path))
+        os.remove(script_path)
 # _____________________________________________
 
 
@@ -171,7 +176,7 @@ def script_exists(migration, direction, script_name):
     script_file = '%s.py' % script_name
     script_path = '%s/%s' % (direction, script_file)
     if os.path.exists(script_path):
-        print("Script {} already exists".format(script_path))
+        click.echo("Script {} exists".format(script_path))
         return True
     return False
 # _____________________________________________
@@ -377,8 +382,7 @@ def remove(migration, change):
         remove_from_plan(migration, change)
 
     for direction in ['deploy', 'revert']:
-        if script_exists(migration, direction, change):
-            remove_script(migration, direction, change)
+        remove_script(migration, direction, change)
 # _____________________________________________
 
 
