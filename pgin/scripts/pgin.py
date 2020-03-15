@@ -358,11 +358,12 @@ def init(migration, force=False):
     dba.create_meta_schema()
     dba.create_plan_table()
     dba.create_changes_table()
+    dba.create_tags_table()
     dba.cursor.close()
     dba.conn.close()
 
     if os.path.exists(migration.plan):
-        click.echo("Migration plan %s already exists", migration.plan)
+        click.echo("Migration plan {} already exists".format(migration.plan))
         sys.exit(0)
 
     create_plan(migration.plan)

@@ -57,6 +57,14 @@ class DBAdmin:
             params = {'dbname': AsIs(newdb), 'user': AsIs(newdb_owner)}
             admin_cursor.execute(query, params)
 
+            # Reset search_path
+            query = """
+                ALTER ROLE %s
+                RESET search_path;
+            """
+            params = [AsIs(self.dbuser)]
+            admin_cursor.execute(query, params)
+
             # Set search_path
             query = """
                 ALTER DATABASE %(dbname)s
@@ -91,6 +99,7 @@ class DBAdmin:
            CREATE TABLE IF NOT EXISTS %s.plan (
                changeid CHAR(40) PRIMARY KEY,
                name VARCHAR(100) UNIQUE,
+               msg VARCHAR(512),
                planned TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL
            );
         """
@@ -108,6 +117,21 @@ class DBAdmin:
            );
         """
         params = [AsIs(self.meta_schema)]
+        self.cursor.execute(query, params)
+        self.conn.commit()
+    # _____________________________
+
+    def create_tags_table(self):
+        query = """
+           CREATE TABLE IF NOT EXISTS %s.tags (
+               changeid CHAR(40) PRIMARY KEY,
+               tag VARCHAR(100) UNIQUE,
+               msg VARCHAR(512),
+               tagged TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL,
+               FOREIGN KEY(changeid) REFERENCES %s.changes(changeid)
+           );
+        """
+        params = [AsIs(self.meta_schema), AsIs(self.meta_schema)]
         self.cursor.execute(query, params)
         self.conn.commit()
     # _____________________________
