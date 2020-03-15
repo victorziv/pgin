@@ -309,6 +309,7 @@ def init(migration):
     dba.conn = dba.connectdb(dburi)
     dba.cursor = dba.conn.cursor()
     dba.create_meta_schema()
+    dba.create_plan_table()
     dba.create_changes_table()
     dba.cursor.close()
     dba.conn.close()

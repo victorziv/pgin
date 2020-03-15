@@ -86,6 +86,19 @@ class DBAdmin:
         self.conn.commit()
     # ___________________________________________
 
+    def create_plan_table(self):
+        query = """
+           CREATE TABLE IF NOT EXISTS %s.plan (
+               changeid CHAR(40) PRIMARY KEY,
+               name VARCHAR(100) UNIQUE,
+               planned TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL
+           );
+        """
+        params = [AsIs(self.meta_schema)]
+        self.cursor.execute(query, params)
+        self.conn.commit()
+    # _____________________________
+
     def create_changes_table(self):
         query = """
            CREATE TABLE IF NOT EXISTS %s.changes (
