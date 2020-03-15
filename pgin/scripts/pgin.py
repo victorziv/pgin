@@ -55,6 +55,15 @@ pass_migration = click.make_pass_decorator(Migration)
 # _____________________________________________
 
 
+def change_deployed(migration, change):
+    dba = connect_dba(migration)
+    changeid = dba.fetch_deployed_changeid_by_name(change)
+    if changeid is not None:
+        return True
+    return False
+# _____________________________________________
+
+
 def create_script(migration, direction, name):
     template_file = '%s.tmpl' % direction
     script_file = '%s.py' % name
@@ -87,6 +96,14 @@ def connect_dba(migration):
     dba.conn = dba.connectdb(dburi)
     dba.cursor = dba.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     return dba
+# _____________________________________________
+
+
+def create_pgin_metaschema(dba):
+    dba.create_meta_schema()
+    dba.create_plan_table()
+    dba.create_changes_table()
+    dba.create_tags_table()
 # _____________________________________________
 
 
@@ -283,7 +300,7 @@ def add(migration, change, msg):
     update_plan(migration, change, msg)
     dba = connect_dba(migration)
     changeid = get_changeid(change)
-    dba.apply_planned(changeid, change)
+    dba.apply_planned(changeid, change, msg)
 
     for direction in ['deploy', 'revert']:
         if not script_exists(migration, direction, change):
@@ -357,9 +374,6 @@ def init(migration, force=False):
     try:
         dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
         dba.createdb()
-#         dburi = Config.db_connection_uri(dbname=migration.project, dbuser=migration.project_user)
-#         dba.conn = dba.connectdb(dburi)
-#         dba.cursor = dba.conn.cursor()
         dba = connect_dba(migration)
         create_pgin_metaschema(dba)
     finally:
@@ -374,14 +388,6 @@ def init(migration, force=False):
 # _____________________________________________
 
 
-def create_pgin_metaschema(dba):
-    dba.create_meta_schema()
-    dba.create_plan_table()
-    dba.create_changes_table()
-    dba.create_tags_table()
-# _____________________________________________
-
-
 @cli.command()
 @click.argument('change', required=True)
 @pass_migration
@@ -391,9 +397,16 @@ def remove(migration, change):
     """
 
     os.chdir(migration.home)
-    if plan_record_exists(migration, change):
-        click.echo("Removing change %s from migration plan" % change)
-        remove_from_plan(migration, change)
+    if not plan_record_exists(migration, change):
+        click.echo("Change {} not found in migration plan".format(change))
+        sys.exit(0)
+
+    if change_deployed(migration, change):
+        click.echo("Cannot remove a deployed change {}. Revert first".format(change))
+        sys.exit(1)
+
+    click.echo("Removing change %s from migration plan" % change)
+    remove_from_plan(migration, change)
 
     for direction in ['deploy', 'revert']:
         remove_script(migration, direction, change)
