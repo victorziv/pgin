@@ -21,6 +21,15 @@ logger = applogging.set_frontend_logger(conf['PROJECT'])
 from pgin.lib.helpers import create_directory  # noqa
 from pgin.dba import DBAdmin  # noqa
 MSG_LENGTH = 40
+# _____________________________________________
+
+
+def get_version():
+    rootdir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+    with open(os.path.join(rootdir, 'VERSION')) as fp:
+        version = fp.read()
+
+    return version.strip()
 # =====================================
 
 
@@ -127,7 +136,7 @@ def not_revert_if_false(ctx, param, value):
 # _____________________________________________
 
 
-def script_already_exists(migration, direction, script_name):
+def script_exists(migration, direction, script_name):
 
     os.chdir(migration.home)
     script_file = '%s.py' % script_name
@@ -154,12 +163,13 @@ def update_plan(migration, change, msg):
 # _____________________________________________
 
 
-def validate_plan_record_not_exists(migration, change):
+def plan_record_exists(migration, change):
     with jsonlines.open(migration.plan, mode='r') as reader:
         for l in reader:
             if l['change'] == change:
-                click.echo(message='Change {} already exists in migration plan'.format(change))
-                sys.exit(0)
+                return True
+
+    return False
 # _____________________________________________
 
 
@@ -212,7 +222,7 @@ def validate_project_user(ctx, param, value):
     callback=validate_project_user,
     help='Parent project generic user account'
 )
-@click.version_option('0.1.0')
+@click.version_option(get_version())
 @click.pass_context
 def cli(ctx, home, project, project_user):
     """
@@ -232,10 +242,13 @@ def add(migration, change, msg):
     """
 
     os.chdir(migration.home)
-    validate_plan_record_not_exists(migration, change)
+    if plan_record_exists(migration, change):
+        click.echo(message='Change {} already exists in migration plan'.format(change))
+        sys.exit(0)
+
     update_plan(migration, change, msg)
     for direction in ['deploy', 'revert']:
-        if not script_already_exists(migration, direction, change):
+        if not script_exists(migration, direction, change):
             create_script(migration, direction, change)
 # _____________________________________________
 
@@ -313,6 +326,23 @@ def init(migration):
     dba.cursor.close()
     dba.conn.close()
     create_plan(migration.plan)
+# _____________________________________________
+
+
+@cli.command()
+@click.argument('change', required=True)
+@pass_migration
+def remove(migration, change):
+    """
+    Adds migration script to the plan
+    """
+
+    os.chdir(migration.home)
+    validate_plan_record_not_exists(migration, change)
+    remove_from_plan(migration, change)
+    for direction in ['deploy', 'revert']:
+        if script_exists(migration, direction, change):
+            remove_script(migration, direction, change)
 # _____________________________________________
 
 
