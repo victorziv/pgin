@@ -281,6 +281,10 @@ def add(migration, change, msg):
         sys.exit(0)
 
     update_plan(migration, change, msg)
+    dba = connect_dba(migration)
+    changeid = get_changeid(change)
+    dba.apply_planned(changeid, change)
+
     for direction in ['deploy', 'revert']:
         if not script_exists(migration, direction, change):
             create_script(migration, direction, change)
@@ -350,23 +354,31 @@ def init(migration, force=False):
         logger.info("Created %s/", d)
         turn_to_python_package(os.path.join(migration.home, d))
 
-    dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
-    dba.createdb()
-    dburi = Config.db_connection_uri(dbname=migration.project, dbuser=migration.project_user)
-    dba.conn = dba.connectdb(dburi)
-    dba.cursor = dba.conn.cursor()
-    dba.create_meta_schema()
-    dba.create_plan_table()
-    dba.create_changes_table()
-    dba.create_tags_table()
-    dba.cursor.close()
-    dba.conn.close()
+    try:
+        dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
+        dba.createdb()
+#         dburi = Config.db_connection_uri(dbname=migration.project, dbuser=migration.project_user)
+#         dba.conn = dba.connectdb(dburi)
+#         dba.cursor = dba.conn.cursor()
+        dba = connect_dba(migration)
+        create_pgin_metaschema(dba)
+    finally:
+        dba.cursor.close()
+        dba.conn.close()
 
     if os.path.exists(migration.plan):
         click.echo("Migration plan {} already exists".format(migration.plan))
         sys.exit(0)
 
     create_plan(migration.plan)
+# _____________________________________________
+
+
+def create_pgin_metaschema(dba):
+    dba.create_meta_schema()
+    dba.create_plan_table()
+    dba.create_changes_table()
+    dba.create_tags_table()
 # _____________________________________________
 
 
