@@ -75,6 +75,7 @@ def create_plan(plan):
     """
     Create emply jsonl file
     """
+    click.echo("Creating migration plan: %s", plan)
     with open(plan, 'w') as f:
         f.write('')
 # _____________________________________________
@@ -328,9 +329,8 @@ def init(migration, force=False):
         Initiates the project DB migrations.
     """
 
-    plan_path = migration.plan
-    logger.debug("Migration plan path: %r", plan_path)
-    if os.path.exists(plan_path) and not force:
+    logger.debug("Migration plan path: %r", migration.plan)
+    if os.path.exists(migration.plan) and not force:
         logger.info("Project %s migration facility already initiated", migration.project)
         sys.exit(0)
 
@@ -353,6 +353,11 @@ def init(migration, force=False):
     dba.create_changes_table()
     dba.cursor.close()
     dba.conn.close()
+
+    if os.path.exists(migration.plan):
+        click.echo("Migration plan %s already exists", migration.plan)
+        sys.exit(0)
+
     create_plan(migration.plan)
 # _____________________________________________
 
