@@ -39,7 +39,8 @@ class Migration(object):
         self.logger = logger
         self.conf = conf
         self.home = home
-        self.plan = os.path.join(self.home, 'plan.jsonl')
+        self.plan_name = 'plan.jsonl'
+        self.plan = os.path.join(self.home, self.plan_name)
         self.project = project
         self.project_user = project_user
         pgindir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
@@ -133,6 +134,32 @@ def not_revert_if_false(ctx, param, value):
     if not value:
         click.echo("Nothing reverted")
         ctx.exit()
+# _____________________________________________
+
+
+def remove_from_plan(migration, change):
+    try:
+        fpr = open(migration.plan)
+        reader = jsonlines.Reader(fpr)
+
+        tmp_plan = "tmp-%s" % migration.plan_name
+        tmp_plan_path = os.path.join(os.path.dirname(migration.plan, tmp_plan))
+        fpw = open(tmp_plan_path, 'w')
+        writer = jsonlines.Writer(fpw)
+
+        for l in reader:
+            if l['change'] == change:
+                continue
+            writer.write(l)
+
+    finally:
+        fpr.close()
+        fpw.close()
+# _____________________________________________
+
+
+def remove_script(migration, direction, change):
+    pass
 # _____________________________________________
 
 
@@ -294,17 +321,18 @@ def deploy(migration, upto=None):
 
 
 @cli.command()
+@click.option('-f', '--force', is_flag=True, required=False, help="Forcibly re-initiate DB and migration installment")
 @pass_migration
-def init(migration):
+def init(migration, force=False):
     """
         Initiates the project DB migrations.
     """
 
     plan_path = migration.plan
     logger.debug("Migration plan path: %r", plan_path)
-    if os.path.exists(plan_path):
+    if os.path.exists(plan_path) and not force:
         logger.info("Project %s migration facility already initiated", migration.project)
-        return
+        sys.exit(0)
 
     logger.info('Initiating project %s migrations', migration.project)
     logger.info('Migration container path: %s', migration.home)
@@ -338,8 +366,10 @@ def remove(migration, change):
     """
 
     os.chdir(migration.home)
-    validate_plan_record_not_exists(migration, change)
-    remove_from_plan(migration, change)
+    if plan_record_exists(migration, change):
+        click.echo("Removing change %s from migration plan" % change)
+        remove_from_plan(migration, change)
+
     for direction in ['deploy', 'revert']:
         if script_exists(migration, direction, change):
             remove_script(migration, direction, change)
