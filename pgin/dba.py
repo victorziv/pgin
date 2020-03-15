@@ -30,7 +30,21 @@ class DBAdmin:
 
         self.cursor.execute(query, params)
         self.conn.commit()
+    # _____________________________
 
+    def apply_planned(self, changeid, change):
+        query = """
+            INSERT INTO %s.plan
+            (changeid, name, planned)
+            VALUES
+            (%s, %s, %s)
+            ON CONFLICT(changeid)
+            DO NOTHING
+        """
+        params = [AsIs(self.meta_schema), changeid, change, datetime.datetime.utcnow()]
+
+        self.cursor.execute(query, params)
+        self.conn.commit()
     # _____________________________
 
     def createdb(self, newdb=None, newdb_owner=None):
