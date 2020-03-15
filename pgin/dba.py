@@ -300,6 +300,17 @@ class DBAdmin:
         self.conn.commit()
     # _____________________________
 
+    def remove_change_from_plan(self, change):
+        query = """
+            DELETE FROM %s.plan
+            WHERE name = %s
+        """
+        params = [AsIs(self.meta_schema), change]
+
+        self.cursor.execute(query, params)
+        self.conn.commit()
+    # _____________________________
+
     def resetdb(self, dbname, logger=None):
 
         if logger is None:

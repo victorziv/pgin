@@ -155,6 +155,19 @@ def not_revert_if_false(ctx, param, value):
 # _____________________________________________
 
 
+def not_remove_if_false(ctx, param, value):
+    if not value:
+        click.echo("Nothing removed")
+        ctx.exit()
+# _____________________________________________
+
+
+def remove_from_meta_plan(migration, change):
+    dba = connect_dba(migration)
+    dba.remove_change_from_plan(change)
+# _____________________________________________
+
+
 def remove_from_plan(migration, change):
     try:
         fpr = open(migration.plan)
@@ -389,6 +402,7 @@ def init(migration, force=False):
 
 
 @cli.command()
+@click.option('-y', '--yes', is_flag=True, callback=not_remove_if_false, expose_value=False, prompt='Remove change?')
 @click.argument('change', required=True)
 @pass_migration
 def remove(migration, change):
@@ -407,6 +421,7 @@ def remove(migration, change):
 
     click.echo("Removing change %s from migration plan" % change)
     remove_from_plan(migration, change)
+    remove_from_meta_plan(migration, change)
 
     for direction in ['deploy', 'revert']:
         remove_script(migration, direction, change)
