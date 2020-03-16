@@ -30,7 +30,21 @@ class DBAdmin:
 
         self.cursor.execute(query, params)
         self.conn.commit()
+    # _____________________________
 
+    def apply_planned(self, changeid, change, msg):
+        query = """
+            INSERT INTO %s.plan
+            (changeid, name, msg, planned)
+            VALUES
+            (%s, %s, %s, %s)
+            ON CONFLICT(changeid)
+            DO NOTHING
+        """
+        params = [AsIs(self.meta_schema), changeid, change, msg, datetime.datetime.utcnow()]
+
+        self.cursor.execute(query, params)
+        self.conn.commit()
     # _____________________________
 
     def createdb(self, newdb=None, newdb_owner=None):
@@ -55,6 +69,14 @@ class DBAdmin:
             # Create DB
             query = """CREATE DATABASE %(dbname)s WITH OWNER %(user)s"""
             params = {'dbname': AsIs(newdb), 'user': AsIs(newdb_owner)}
+            admin_cursor.execute(query, params)
+
+            # Reset search_path
+            query = """
+                ALTER ROLE %s
+                RESET search_path;
+            """
+            params = [AsIs(self.dbuser)]
             admin_cursor.execute(query, params)
 
             # Set search_path
@@ -86,6 +108,20 @@ class DBAdmin:
         self.conn.commit()
     # ___________________________________________
 
+    def create_plan_table(self):
+        query = """
+           CREATE TABLE IF NOT EXISTS %s.plan (
+               changeid CHAR(40) PRIMARY KEY,
+               name VARCHAR(100) UNIQUE,
+               msg TEXT,
+               planned TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL
+           );
+        """
+        params = [AsIs(self.meta_schema)]
+        self.cursor.execute(query, params)
+        self.conn.commit()
+    # _____________________________
+
     def create_changes_table(self):
         query = """
            CREATE TABLE IF NOT EXISTS %s.changes (
@@ -95,6 +131,21 @@ class DBAdmin:
            );
         """
         params = [AsIs(self.meta_schema)]
+        self.cursor.execute(query, params)
+        self.conn.commit()
+    # _____________________________
+
+    def create_tags_table(self):
+        query = """
+           CREATE TABLE IF NOT EXISTS %s.tags (
+               changeid CHAR(40) PRIMARY KEY,
+               tag VARCHAR(100) UNIQUE,
+               msg TEXT,
+               tagged TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL,
+               FOREIGN KEY(changeid) REFERENCES %s.changes(changeid)
+           );
+        """
+        params = [AsIs(self.meta_schema), AsIs(self.meta_schema)]
         self.cursor.execute(query, params)
         self.conn.commit()
     # _____________________________
@@ -170,6 +221,22 @@ class DBAdmin:
         return [dict(f) for f in fetch]
     # ___________________________
 
+    def fetch_deployed_changeid_by_name(self, change):
+        query = """
+            SELECT changeid
+            FROM %s.changes
+            WHERE name = %s
+        """
+        params = [AsIs(self.meta_schema), change]
+
+        self.cursor.execute(query, params)
+        fetch = self.cursor.fetchone()
+        if fetch is None:
+            return
+
+        return dict(fetch)['changeid']
+    # ___________________________
+
     def grant_connect_to_db(self):
         try:
             conn = self.connectdb(self.conf['DB_CONN_URI_ADMIN'])
@@ -228,6 +295,17 @@ class DBAdmin:
             WHERE changeid = %s
         """
         params = [AsIs(self.meta_schema), changeid]
+
+        self.cursor.execute(query, params)
+        self.conn.commit()
+    # _____________________________
+
+    def remove_change_from_plan(self, change):
+        query = """
+            DELETE FROM %s.plan
+            WHERE name = %s
+        """
+        params = [AsIs(self.meta_schema), change]
 
         self.cursor.execute(query, params)
         self.conn.commit()
