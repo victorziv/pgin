@@ -326,13 +326,13 @@ def add(migration, change, msg):
 @pass_migration
 def deploy(migration, upto=None):
     """
-    Deploys undeployed
+    Deploys pending changes
     """
 
     if upto is None:
-        msg = 'Deploying all changes to %s' % migration.project
+        msg = 'Deploying all pending changes to %s' % migration.project
     else:
-        msg = 'Deploying changes to %s. Last change to deploy: %s' % (migration.project, upto)
+        msg = 'Deploying pending changes to %s. Last change to deploy: %s' % (migration.project, upto)
 
     click.echo(msg)
 
@@ -343,8 +343,12 @@ def deploy(migration, upto=None):
 
             for l in reader:
                 change = l['change']
-                click.echo(message="+ %s %s " % (change, '.' * (MSG_LENGTH - len(change))), nl=False)
                 deploy, changeid = get_change_deploy(migration, dba, change)
+
+                if change_deployed(migration, change):
+                    continue
+
+                click.echo(message="+ %s %s " % (change, '.' * (MSG_LENGTH - len(change))), nl=False)
                 deploy()
                 dba.apply_change(changeid, change)
 
@@ -352,10 +356,12 @@ def deploy(migration, upto=None):
                 if change == upto:
                     break
 
+    except psycopg2.ProgrammingError as pe:
+        click.echo(click.style('fail', fg='red'))
+        click.echo("!!! Error in deploy: {}".format(pe))
     except Exception as e:
         click.echo(click.style('fail', fg='red'))
         logger.error("Exception in deploy: %s", e)
-        revert(migration)
     finally:
         disconnect_dba(dba)
 # _____________________________________________
@@ -437,9 +443,9 @@ def revert(migration, downto=None):
     Revert deployed
     """
     if downto is None:
-        msg = 'Reverting all changes from %s' % migration.project
+        msg = 'Reverting all deployed changes from %s' % migration.project
     else:
-        msg = 'Reverting changes from %s. Last change to revert: %s' % (migration.project, downto)
+        msg = 'Reverting deployed changes from %s. Last change to revert: %s' % (migration.project, downto)
 
     click.echo(msg)
 
@@ -451,7 +457,7 @@ def revert(migration, downto=None):
         for change_d in changes:
             change = change_d['name']
             changeid = change_d['changeid']
-            click.echo(message="- %s %s " % (change, '.' * 30), nl=False)
+            click.echo(message="- %s %s " % (change, '.' * (MSG_LENGTH - len(change))), nl=False)
             revert = get_change_revert(migration, dba, change)
             revert()
             dba.remove_change(changeid)
@@ -462,7 +468,6 @@ def revert(migration, downto=None):
     except Exception:
         click.echo(click.style('fail', fg='red'))
         logger.exception("Exception in revert")
-        deploy(migration)
     finally:
         disconnect_dba(dba)
 # _____________________________________________
