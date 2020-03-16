@@ -237,6 +237,22 @@ class DBAdmin:
         return dict(fetch)['changeid']
     # ___________________________
 
+    def fetch_planned_changeid_by_name(self, change):
+        query = """
+            SELECT changeid
+            FROM %s.plan
+            WHERE name = %s
+        """
+        params = [AsIs(self.meta_schema), change]
+
+        self.cursor.execute(query, params)
+        fetch = self.cursor.fetchone()
+        if fetch is None:
+            return
+
+        return dict(fetch)['changeid']
+    # ___________________________
+
     def grant_connect_to_db(self):
         try:
             conn = self.connectdb(self.conf['DB_CONN_URI_ADMIN'])

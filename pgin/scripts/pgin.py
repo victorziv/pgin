@@ -64,6 +64,15 @@ def change_deployed(migration, change):
 # _____________________________________________
 
 
+def change_is_planned(migration, change):
+    dba = connect_dba(migration)
+    changeid = dba.fetch_planned_changeid_by_name(change)
+    if changeid is not None:
+        return True
+    return False
+# _____________________________________________
+
+
 def create_script(migration, direction, name):
     template_file = '%s.tmpl' % direction
     script_file = '%s.py' % name
@@ -332,6 +341,11 @@ def deploy(migration, upto=None):
     if upto is None:
         msg = 'Deploying all pending changes to %s' % migration.project
     else:
+
+        if not change_is_planned(migration, upto):
+            click.echo("Change {} is not found in migration plan".format(upto))
+            sys.exit(1)
+
         msg = 'Deploying pending changes to %s. Last change to deploy: %s' % (migration.project, upto)
 
     click.echo(msg)
