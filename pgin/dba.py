@@ -113,7 +113,7 @@ class DBAdmin:
            CREATE TABLE IF NOT EXISTS %s.plan (
                changeid CHAR(40) PRIMARY KEY,
                name VARCHAR(100) UNIQUE,
-               msg VARCHAR(512),
+               msg TEXT,
                planned TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL
            );
         """
@@ -140,7 +140,7 @@ class DBAdmin:
            CREATE TABLE IF NOT EXISTS %s.tags (
                changeid CHAR(40) PRIMARY KEY,
                tag VARCHAR(100) UNIQUE,
-               msg VARCHAR(512),
+               msg TEXT,
                tagged TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL,
                FOREIGN KEY(changeid) REFERENCES %s.changes(changeid)
            );
