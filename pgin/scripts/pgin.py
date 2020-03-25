@@ -16,7 +16,7 @@ if runtype is None:
 conf = Configurator.configure(config_type=runtype)
 
 from lib import applogging  # noqa 
-logger = applogging.set_frontend_logger(conf['PROJECT'])
+logger = applogging.set_logger(logger_name=conf['PROJECT'])
 
 from pgin.lib.helpers import create_directory  # noqa
 from pgin.dba import DBAdmin  # noqa
