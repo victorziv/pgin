@@ -93,7 +93,7 @@ def create_plan(plan):
     """
     Create emply jsonl file
     """
-    click.echo("Creating migration plan: %s", plan)
+    click.echo("Creating migration plan: {}".format(plan))
     with open(plan, 'w') as f:
         f.write('')
 # _____________________________________________
@@ -227,21 +227,9 @@ def turn_to_python_package(path):
 # _____________________________________________
 
 
-def update_plan(migration, change, msg):
-    with jsonlines.open(migration.plan, mode='a') as writer:
-        writer.write({
-            'change': change,
-            'msg': msg,
-        })
-# _____________________________________________
-
-
 def plan_record_exists(migration, change):
-    with jsonlines.open(migration.plan, mode='r') as reader:
-        for l in reader:
-            if l['change'] == change:
-                return True
-
+    if change_is_planned(migration, change):
+        return True
     return False
 # _____________________________________________
 
@@ -271,6 +259,13 @@ def validate_project_user(ctx, param, value):
     return value
 # _____________________________________________
 
+
+def update_plan(migration, change, msg):
+    with jsonlines.open(migration.plan, mode='a') as writer:
+        writer.write({
+            'change': change,
+            'msg': msg,
+        })
 
 # ============= Commands ==================
 
@@ -413,7 +408,7 @@ def init(migration, force=False):
         dba.cursor.close()
         dba.conn.close()
 
-    if os.path.exists(migration.plan):
+    if os.path.exists(migration.plan) and not force:
         click.echo("Migration plan {} already exists".format(migration.plan))
         sys.exit(0)
 

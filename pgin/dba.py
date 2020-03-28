@@ -35,13 +35,13 @@ class DBAdmin:
     def apply_planned(self, changeid, change, msg):
         query = """
             INSERT INTO %s.plan
-            (changeid, name, msg, planned)
+            (changeid, name, planned, msg)
             VALUES
             (%s, %s, %s, %s)
             ON CONFLICT(changeid)
             DO NOTHING
         """
-        params = [AsIs(self.meta_schema), changeid, change, msg, datetime.datetime.utcnow()]
+        params = [AsIs(self.meta_schema), changeid, change, datetime.datetime.utcnow(), msg]
 
         self.cursor.execute(query, params)
         self.conn.commit()
