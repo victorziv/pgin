@@ -108,27 +108,27 @@ class DBAdmin:
         self.conn.commit()
     # ___________________________________________
 
-    def create_plan_table(self):
-        query = """
-           CREATE TABLE IF NOT EXISTS %s.plan (
-               changeid CHAR(40) PRIMARY KEY,
-               name VARCHAR(100) UNIQUE,
-               msg TEXT,
-               planned TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL
-           );
-        """
-        params = [AsIs(self.meta_schema)]
-        self.cursor.execute(query, params)
-        self.conn.commit()
-    # _____________________________
-
     def create_changes_table(self):
         query = """
            CREATE TABLE IF NOT EXISTS %s.changes (
                changeid CHAR(40) PRIMARY KEY,
                name VARCHAR(100) UNIQUE,
                applied TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL
-           );
+           )
+        """
+        params = [AsIs(self.meta_schema)]
+        self.cursor.execute(query, params)
+        self.conn.commit()
+    # _____________________________
+
+    def create_plan_table(self):
+        query = """
+           CREATE TABLE IF NOT EXISTS %s.plan (
+               changeid CHAR(40) PRIMARY KEY,
+               name VARCHAR(100) UNIQUE,
+               planned TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL,
+               msg TEXT
+           )
         """
         params = [AsIs(self.meta_schema)]
         self.cursor.execute(query, params)
@@ -143,7 +143,7 @@ class DBAdmin:
                msg TEXT,
                tagged TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL,
                FOREIGN KEY(changeid) REFERENCES %s.changes(changeid)
-           );
+           )
         """
         params = [AsIs(self.meta_schema), AsIs(self.meta_schema)]
         self.cursor.execute(query, params)
