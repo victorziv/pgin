@@ -480,3 +480,23 @@ def revert(migration, downto=None):
     finally:
         disconnect_dba(dba)
 # _____________________________________________
+
+
+@cli.command()
+@click.argument('-c', '--change', required=True, help="Change name to attach tag to")
+@click.option('-m', '--msg', required=True, help="The new tag message")
+@pass_migration
+def tag(migration, change, msg):
+    """
+    Apply tag to a change
+    """
+    os.chdir(migration.home)
+    update_plan(migration, change, msg)
+    dba = connect_dba(migration)
+    changeid = get_changeid(change)
+    dba.apply_planned(changeid, change, msg)
+
+    for direction in ['deploy', 'revert']:
+        if not script_exists(migration, direction, change):
+            create_script(migration, direction, change)
+# _____________________________________________
