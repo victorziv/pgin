@@ -483,26 +483,27 @@ def revert(migration, downto=None):
 
 
 def set_tag_in_plan(migration, tag, msg, change):
-    try:
-        fpr = open(migration.plan)
-        reader = jsonlines.Reader(fpr)
-
-        tmp_plan = "tmp-%s" % migration.plan_name
-        tmp_plan_path = os.path.join(os.path.dirname(migration.plan), tmp_plan)
-        fpw = open(tmp_plan_path, 'w')
-        writer = jsonlines.Writer(fpw)
-
+    lines = []
+    with jsonlines.open(migration.plan) as reader:
+        tag_set = False
         for l in reader:
             if l['change'] == change:
                 l['tag'] = tag
                 l['tagmsg'] = msg
+                tag_set = True
+            lines.append(l)
+
+        if not tag_set:
+            last = lines[-1]
+            change = last['change']
+            last['tag'] = tag
+            last['tagmsg'] = msg
+
+    with jsonlines.open(migration.plan, mode='w') as writer:
+        for l in lines:
             writer.write(l)
 
-    finally:
-        fpr.close()
-        fpw.close()
-        os.rename(tmp_plan_path, migration.plan)
-        click.echo("Tag {} applied to change {}".format(tag, change))
+    click.echo("Tag {} applied to change {} in plan file".format(tag, change))
 # _____________________________________________
 
 
