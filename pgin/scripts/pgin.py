@@ -482,21 +482,45 @@ def revert(migration, downto=None):
 # _____________________________________________
 
 
+def set_tag_in_plan(migration, tag, msg, change):
+    try:
+        fpr = open(migration.plan)
+        reader = jsonlines.Reader(fpr)
+
+        tmp_plan = "tmp-%s" % migration.plan_name
+        tmp_plan_path = os.path.join(os.path.dirname(migration.plan), tmp_plan)
+        fpw = open(tmp_plan_path, 'w')
+        writer = jsonlines.Writer(fpw)
+
+        for l in reader:
+            if l['change'] == change:
+                l['tag'] = tag
+                l['tagmsg'] = msg
+            writer.write(l)
+
+    finally:
+        fpr.close()
+        fpw.close()
+        os.rename(tmp_plan_path, migration.plan)
+        click.echo("Tag {} applied to change {}".format(tag, change))
+# _____________________________________________
+
+
 @cli.command()
-@click.argument('-c', '--change', required=True, help="Change name to attach tag to")
+@click.argument('tag', required=True)
+@click.option('-c', '--change', help="""
+    Change name to attach tag to. Tag is attached to the last change if not provided""")
 @click.option('-m', '--msg', required=True, help="The new tag message")
 @pass_migration
-def tag(migration, change, msg):
+def tag(migration, msg, tag, change=None):
     """
     Apply tag to a change
     """
     os.chdir(migration.home)
-    update_plan(migration, change, msg)
-    dba = connect_dba(migration)
-    changeid = get_changeid(change)
-    dba.apply_planned(changeid, change, msg)
-
-    for direction in ['deploy', 'revert']:
-        if not script_exists(migration, direction, change):
-            create_script(migration, direction, change)
+    set_tag_in_plan(
+        migration=migration,
+        tag=tag,
+        msg=msg,
+        change=change
+    )
 # _____________________________________________
