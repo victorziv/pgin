@@ -54,9 +54,26 @@ class DBAdmin:
             VALUES
             (%s, %s, %s, %s)
             ON CONFLICT(changeid)
-            DO NOTHING
+            DO UPDATE
+            SET
+                tag = %s,
+                msg = %s,
+                tagged = %s
+            WHERE %s.tags.changeid = %s
         """
-        params = [AsIs(self.meta_schema), changeid, tag, msg, datetime.datetime.utcnow()]
+        params = [
+            AsIs(self.meta_schema),
+            changeid,
+            tag,
+            msg,
+            datetime.datetime.utcnow(),
+
+            tag,
+            msg,
+            datetime.datetime.utcnow(),
+            AsIs(self.meta_schema),
+            changeid,
+        ]
 
         self.cursor.execute(query, params)
         self.conn.commit()
@@ -261,6 +278,26 @@ class DBAdmin:
             return
 
         return dict(fetch)['changeid']
+    # ___________________________
+
+    def fetch_tags(self):
+        query = """
+            SELECT
+                t.tag,
+                t.msg,
+                p.name AS change
+            FROM %s.tags t, %s.plan p
+            WHERE t.changeid = p.changeid
+            ORDER BY t.tag
+        """
+        params = [AsIs(self.meta_schema), AsIs(self.meta_schema)]
+
+        self.cursor.execute(query, params)
+        fetch = self.cursor.fetchall()
+        if fetch is None:
+            return []
+
+        return [dict(f) for f in fetch]
     # ___________________________
 
     def grant_connect_to_db(self, dbname=None, dbuser=None):

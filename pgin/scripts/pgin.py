@@ -121,6 +121,25 @@ def disconnect_dba(dba):
 # _____________________________________________
 
 
+def change_entry_or_last(migration, change):
+    '''
+    If passed change is None, the last line index is returned
+    '''
+    lines = []
+    change_ind = None
+    with jsonlines.open(migration.plan) as reader:
+        for ind, l in enumerate(reader):
+            if l['change'] == change:
+                change_ind = ind
+            lines.append(l)
+
+        if change_ind is None:
+            change_ind = -1
+
+    return lines, change_ind
+# _____________________________________________
+
+
 def get_change_deploy(migration, dba, change):
     changeid = get_changeid(change)
     mod = importlib.import_module('%s.deploy.%s' % (conf['DBMIGRATION_PKG'], change))
@@ -294,7 +313,9 @@ def update_plan(migration, change, msg):
 @click.pass_context
 def cli(ctx, home, project, project_user):
     """
-    postmig is a command line tool for HWInfo project DB migrations management
+    pgin is a command line tool for PostgreSQL DB migrations management.
+    Run with Python 3.6+.
+    Uses psycopg2 DB driver.
     """
     ctx.obj = Migration(home=os.path.abspath(home), project=project, project_user=project_user)
 # _____________________________________________
@@ -514,7 +535,6 @@ def set_tag(migration, tag, msg, change):
 
 
 @cli.group()
-# @pass_migration
 def tag():
     """
     pgin tag commands: add, remove or list
@@ -532,32 +552,48 @@ def tag_add(migration, tag, msg, change=None):
     """
     Apply tag to a change.
     If no change passed, the tag is applied to the last change
+    If another tag has been found attached to the change,
+    it is replaced.
     """
     os.chdir(migration.home)
+    lines, change_ind = change_entry_or_last(migration, change)
+    change_line = lines[change_ind]
+    if 'tag' in change_line:
+        click.echo(
+            click.style(
+                'Tag {} already applied to change {}. Replacing with tag {}'.format(
+                    change_line['tag'], change_line['change'], tag),
+                fg='yellow')
+        )
 
-    lines = []
-    with jsonlines.open(migration.plan) as reader:
-        tag_set = False
-        for l in reader:
-            if l['change'] == change:
-                l['tag'] = tag
-                l['tagmsg'] = msg
-                tag_set = True
-            lines.append(l)
-
-        if not tag_set:
-            last = lines[-1]
-            change = last['change']
-            last['tag'] = tag
-            last['tagmsg'] = msg
+    change_line['tag'] = tag
+    change_line['tagmsg'] = msg
 
     with jsonlines.open(migration.plan, mode='w') as writer:
         for l in lines:
             writer.write(l)
 
-    changeid = get_changeid(change)
+    changeid = get_changeid(change_line['change'])
     dba = connect_dba(migration)
     dba.apply_tag(changeid, tag, msg)
 
-    click.echo("Tag {} applied to change {}".format(tag, change))
+    click.echo("Tag {} applied to change {}".format(tag, change_line['change']))
+# _____________________________________________
+
+
+@tag.command('list')
+@pass_migration
+def tag_list(migration):
+    """
+    Apply tag to a change.
+    If no change passed, the tag is applied to the last change
+    """
+
+    dba = connect_dba(migration)
+    tags = dba.fetch_tags()
+
+    click.echo("Tag\tChange\tMessage")
+    click.echo("----------------------------")
+    for tag in tags:
+        click.echo("{}\t{}\t{}".format(tag['tag'], tag['change'], tag['msg']))
 # _____________________________________________
