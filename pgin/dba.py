@@ -47,6 +47,21 @@ class DBAdmin:
         self.conn.commit()
     # _____________________________
 
+    def apply_tag(self, changeid, tag, msg):
+        query = """
+            INSERT INTO %s.tags
+            (changeid, tag, msg, tagged)
+            VALUES
+            (%s, %s, %s, %s)
+            ON CONFLICT(changeid)
+            DO NOTHING
+        """
+        params = [AsIs(self.meta_schema), changeid, tag, msg, datetime.datetime.utcnow()]
+
+        self.cursor.execute(query, params)
+        self.conn.commit()
+    # _____________________________
+
     def createdb(self, newdb=None, newdb_owner=None):
         """
         """
@@ -142,7 +157,7 @@ class DBAdmin:
                tag VARCHAR(100) UNIQUE,
                msg TEXT,
                tagged TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL,
-               FOREIGN KEY(changeid) REFERENCES %s.changes(changeid) ON UPDATE CASCADE
+               FOREIGN KEY(changeid) REFERENCES %s.changes(changeid) ON DELETE CASCADE
            )
         """
         params = [AsIs(self.meta_schema), AsIs(self.meta_schema)]
@@ -173,25 +188,6 @@ class DBAdmin:
         params = (dbname,)
         cursor.execute(query, params)
     # ___________________________________________
-
-#     def dropdb(self, dbname=None):
-#         if dbname is None:
-#             dbname = self.conf['DBNAME']
-
-#         self.logger.info("Dropping DB: {}".format(dbname))
-#         try:
-#             admin_conn = self.connectdb(self.conf['DB_CONN_URI_ADMIN'])
-#             admin_cursor = admin_conn.cursor()
-#             admin_conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-#             self.disconnect_all_from_db(admin_cursor, dbname)
-
-#             query = """DROP DATABASE IF EXISTS %(dbname)s"""
-#             params = {'dbname': AsIs(dbname)}
-#             admin_cursor.execute(query, params)
-#         finally:
-#             admin_cursor.close()
-#             admin_conn.close()
-    # ___________________________
 
     def dropdb(self, db_to_drop=None):
         """
