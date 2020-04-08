@@ -513,21 +513,51 @@ def set_tag(migration, tag, msg, change):
 # _____________________________________________
 
 
-@cli.command()
-@click.argument('tag', required=True)
-@click.option('-c', '--change', help="""
-    Change name to attach tag to. Tag is attached to the last change if not provided""")
-@click.option('-m', '--msg', required=True, help="The new tag message")
-@pass_migration
-def tag(migration, msg, tag, change=None):
+@cli.group()
+# @pass_migration
+def tag():
     """
-    Apply tag to a change
+    pgin tag commands: add, remove or list
+    """
+    pass
+# _____________________________________________
+
+
+@tag.command('add')
+@click.option('-t', '--tag', required=True)
+@click.option('-m', '--msg', required=True, help="The new tag message")
+@click.option('-c', '--change', help="""Change name to attach tag to""")
+@pass_migration
+def tag_add(migration, tag, msg, change=None):
+    """
+    Apply tag to a change.
+    If no change passed, the tag is applied to the last change
     """
     os.chdir(migration.home)
-    set_tag(
-        migration=migration,
-        tag=tag,
-        msg=msg,
-        change=change
-    )
+
+    lines = []
+    with jsonlines.open(migration.plan) as reader:
+        tag_set = False
+        for l in reader:
+            if l['change'] == change:
+                l['tag'] = tag
+                l['tagmsg'] = msg
+                tag_set = True
+            lines.append(l)
+
+        if not tag_set:
+            last = lines[-1]
+            change = last['change']
+            last['tag'] = tag
+            last['tagmsg'] = msg
+
+    with jsonlines.open(migration.plan, mode='w') as writer:
+        for l in lines:
+            writer.write(l)
+
+    changeid = get_changeid(change)
+    dba = connect_dba(migration)
+    dba.apply_tag(changeid, tag, msg)
+
+    click.echo("Tag {} applied to change {}".format(tag, change))
 # _____________________________________________
