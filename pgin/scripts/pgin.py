@@ -401,7 +401,9 @@ def init(migration, force=False):
 
     try:
         dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
-        dba.createdb()
+#         dba.dropdb()
+#         dba.createdb()
+        dba.resetdb()
         dba = connect_dba(migration)
         create_pgin_metaschema(dba)
     finally:
