@@ -360,6 +360,8 @@ def deploy(migration, upto=None):
                 click.echo(message="+ %s %s " % (change, '.' * (MSG_LENGTH - len(change))), nl=False)
                 deploy()
                 dba.apply_change(changeid, change)
+                if 'tag' in l:
+                    dba.apply_tag(changeid, l['tag'], l['tagmsg'])
 
                 click.echo(click.style('ok', fg='green'))
                 if change == upto:
@@ -401,8 +403,6 @@ def init(migration, force=False):
 
     try:
         dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
-#         dba.dropdb()
-#         dba.createdb()
         dba.resetdb()
         dba = connect_dba(migration)
         create_pgin_metaschema(dba)
@@ -484,7 +484,7 @@ def revert(migration, downto=None):
 # _____________________________________________
 
 
-def set_tag_in_plan(migration, tag, msg, change):
+def set_tag(migration, tag, msg, change):
     lines = []
     with jsonlines.open(migration.plan) as reader:
         tag_set = False
@@ -505,7 +505,11 @@ def set_tag_in_plan(migration, tag, msg, change):
         for l in lines:
             writer.write(l)
 
-    click.echo("Tag {} applied to change {} in plan file".format(tag, change))
+    changeid = get_changeid(change)
+    dba = connect_dba(migration)
+    dba.apply_tag(changeid, tag, msg)
+
+    click.echo("Tag {} applied to change {}".format(tag, change))
 # _____________________________________________
 
 
@@ -520,7 +524,7 @@ def tag(migration, msg, tag, change=None):
     Apply tag to a change
     """
     os.chdir(migration.home)
-    set_tag_in_plan(
+    set_tag(
         migration=migration,
         tag=tag,
         msg=msg,
