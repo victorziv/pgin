@@ -16,7 +16,7 @@ if runtype is None:
 conf = Configurator.configure(config_type=runtype)
 
 from lib import applogging  # noqa 
-logger = applogging.set_logger(logger_name=conf['PROJECT'])
+logger = applogging.set_logger(logger_name=conf['PROJECT'], log_to_console=True)
 
 from pgin.lib.helpers import create_directory  # noqa
 from pgin.dba import DBAdmin  # noqa
@@ -93,7 +93,7 @@ def create_plan(plan):
     """
     Create emply jsonl file
     """
-    click.echo("Creating migration plan: %s", plan)
+    click.echo("Creating migration plan: {}".format(plan))
     with open(plan, 'w') as f:
         f.write('')
 # _____________________________________________
@@ -227,21 +227,9 @@ def turn_to_python_package(path):
 # _____________________________________________
 
 
-def update_plan(migration, change, msg):
-    with jsonlines.open(migration.plan, mode='a') as writer:
-        writer.write({
-            'change': change,
-            'msg': msg,
-        })
-# _____________________________________________
-
-
 def plan_record_exists(migration, change):
-    with jsonlines.open(migration.plan, mode='r') as reader:
-        for l in reader:
-            if l['change'] == change:
-                return True
-
+    if change_is_planned(migration, change):
+        return True
     return False
 # _____________________________________________
 
@@ -271,6 +259,13 @@ def validate_project_user(ctx, param, value):
     return value
 # _____________________________________________
 
+
+def update_plan(migration, change, msg):
+    with jsonlines.open(migration.plan, mode='a') as writer:
+        writer.write({
+            'change': change,
+            'msg': msg,
+        })
 
 # ============= Commands ==================
 
@@ -406,14 +401,16 @@ def init(migration, force=False):
 
     try:
         dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
-        dba.createdb()
+#         dba.dropdb()
+#         dba.createdb()
+        dba.resetdb()
         dba = connect_dba(migration)
         create_pgin_metaschema(dba)
     finally:
         dba.cursor.close()
         dba.conn.close()
 
-    if os.path.exists(migration.plan):
+    if os.path.exists(migration.plan) and not force:
         click.echo("Migration plan {} already exists".format(migration.plan))
         sys.exit(0)
 
@@ -484,4 +481,49 @@ def revert(migration, downto=None):
         logger.exception("Exception in revert")
     finally:
         disconnect_dba(dba)
+# _____________________________________________
+
+
+def set_tag_in_plan(migration, tag, msg, change):
+    lines = []
+    with jsonlines.open(migration.plan) as reader:
+        tag_set = False
+        for l in reader:
+            if l['change'] == change:
+                l['tag'] = tag
+                l['tagmsg'] = msg
+                tag_set = True
+            lines.append(l)
+
+        if not tag_set:
+            last = lines[-1]
+            change = last['change']
+            last['tag'] = tag
+            last['tagmsg'] = msg
+
+    with jsonlines.open(migration.plan, mode='w') as writer:
+        for l in lines:
+            writer.write(l)
+
+    click.echo("Tag {} applied to change {} in plan file".format(tag, change))
+# _____________________________________________
+
+
+@cli.command()
+@click.argument('tag', required=True)
+@click.option('-c', '--change', help="""
+    Change name to attach tag to. Tag is attached to the last change if not provided""")
+@click.option('-m', '--msg', required=True, help="The new tag message")
+@pass_migration
+def tag(migration, msg, tag, change=None):
+    """
+    Apply tag to a change
+    """
+    os.chdir(migration.home)
+    set_tag_in_plan(
+        migration=migration,
+        tag=tag,
+        msg=msg,
+        change=change
+    )
 # _____________________________________________

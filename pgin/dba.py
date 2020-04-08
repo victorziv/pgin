@@ -35,13 +35,13 @@ class DBAdmin:
     def apply_planned(self, changeid, change, msg):
         query = """
             INSERT INTO %s.plan
-            (changeid, name, msg, planned)
+            (changeid, name, planned, msg)
             VALUES
             (%s, %s, %s, %s)
             ON CONFLICT(changeid)
             DO NOTHING
         """
-        params = [AsIs(self.meta_schema), changeid, change, msg, datetime.datetime.utcnow()]
+        params = [AsIs(self.meta_schema), changeid, change, datetime.datetime.utcnow(), msg]
 
         self.cursor.execute(query, params)
         self.conn.commit()
@@ -72,12 +72,12 @@ class DBAdmin:
             admin_cursor.execute(query, params)
 
             # Reset search_path
-            query = """
-                ALTER ROLE %s
-                RESET search_path;
-            """
-            params = [AsIs(self.dbuser)]
-            admin_cursor.execute(query, params)
+#             query = """
+#                 ALTER ROLE %s
+#                 RESET search_path;
+#             """
+#             params = [AsIs(self.dbuser)]
+#             admin_cursor.execute(query, params)
 
             # Set search_path
             query = """
@@ -108,27 +108,27 @@ class DBAdmin:
         self.conn.commit()
     # ___________________________________________
 
-    def create_plan_table(self):
-        query = """
-           CREATE TABLE IF NOT EXISTS %s.plan (
-               changeid CHAR(40) PRIMARY KEY,
-               name VARCHAR(100) UNIQUE,
-               msg TEXT,
-               planned TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL
-           );
-        """
-        params = [AsIs(self.meta_schema)]
-        self.cursor.execute(query, params)
-        self.conn.commit()
-    # _____________________________
-
     def create_changes_table(self):
         query = """
            CREATE TABLE IF NOT EXISTS %s.changes (
                changeid CHAR(40) PRIMARY KEY,
                name VARCHAR(100) UNIQUE,
                applied TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL
-           );
+           )
+        """
+        params = [AsIs(self.meta_schema)]
+        self.cursor.execute(query, params)
+        self.conn.commit()
+    # _____________________________
+
+    def create_plan_table(self):
+        query = """
+           CREATE TABLE IF NOT EXISTS %s.plan (
+               changeid CHAR(40) PRIMARY KEY,
+               name VARCHAR(100) UNIQUE,
+               planned TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL,
+               msg TEXT
+           )
         """
         params = [AsIs(self.meta_schema)]
         self.cursor.execute(query, params)
@@ -142,8 +142,8 @@ class DBAdmin:
                tag VARCHAR(100) UNIQUE,
                msg TEXT,
                tagged TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL,
-               FOREIGN KEY(changeid) REFERENCES %s.changes(changeid)
-           );
+               FOREIGN KEY(changeid) REFERENCES %s.changes(changeid) ON DELETE CASCADE
+           )
         """
         params = [AsIs(self.meta_schema), AsIs(self.meta_schema)]
         self.cursor.execute(query, params)
@@ -174,29 +174,43 @@ class DBAdmin:
         cursor.execute(query, params)
     # ___________________________________________
 
-    def drop_table_changelog(self):
-        query = """
-            DROP TABLE IF EXISTS changelog;
+#     def dropdb(self, dbname=None):
+#         if dbname is None:
+#             dbname = self.conf['DBNAME']
+
+#         self.logger.info("Dropping DB: {}".format(dbname))
+#         try:
+#             admin_conn = self.connectdb(self.conf['DB_CONN_URI_ADMIN'])
+#             admin_cursor = admin_conn.cursor()
+#             admin_conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+#             self.disconnect_all_from_db(admin_cursor, dbname)
+
+#             query = """DROP DATABASE IF EXISTS %(dbname)s"""
+#             params = {'dbname': AsIs(dbname)}
+#             admin_cursor.execute(query, params)
+#         finally:
+#             admin_cursor.close()
+#             admin_conn.close()
+    # ___________________________
+
+    def dropdb(self, db_to_drop=None):
         """
-        params = {}
+        """
 
-        self.cursor.execute(query, params)
-        self.conn.commit()
-    # _____________________________
+        if db_to_drop is None:
+            db_to_drop = self.dbname
 
-    def dropdb(self, dbname=None):
-        if dbname is None:
-            dbname = self.conf['DBNAME']
+        self.logger.info("Dropping DB %s", db_to_drop)
 
-        self.logger.info("Dropping DB: {}".format(dbname))
         try:
-            admin_conn = self.connectdb(self.conf['DB_CONN_URI_ADMIN'])
+            admin_db_uri = Config.db_connection_uri_admin(dbuser=self.dbuser)
+            self.logger.info("Admin DB URI: %r", admin_db_uri)
+            admin_conn = self.connectdb(admin_db_uri)
             admin_cursor = admin_conn.cursor()
             admin_conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-            self.disconnect_all_from_db(admin_cursor, dbname)
 
             query = """DROP DATABASE IF EXISTS %(dbname)s"""
-            params = {'dbname': AsIs(dbname)}
+            params = {'dbname': AsIs(db_to_drop)}
             admin_cursor.execute(query, params)
         finally:
             admin_cursor.close()
@@ -253,15 +267,22 @@ class DBAdmin:
         return dict(fetch)['changeid']
     # ___________________________
 
-    def grant_connect_to_db(self):
+    def grant_connect_to_db(self, dbname=None, dbuser=None):
+        if dbname is None:
+            dbname = self.dbname
+
+        if dbuser is None:
+            dbuser = self.dbuser
+
         try:
-            conn = self.connectdb(self.conf['DB_CONN_URI_ADMIN'])
+            dburi = Config.db_connection_uri(dbname, dbuser)
+            conn = self.connectdb(dburi)
             cursor = conn.cursor()
             conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
             query = """
                 GRANT CONNECT ON DATABASE %s TO %s
             """
-            params = (AsIs(self.conf['DBNAME']), AsIs(self.conf['PROJECT_USER']))
+            params = (AsIs(dbname), AsIs(dbuser))
             cursor.execute(query, params)
         finally:
             cursor.close()
@@ -327,31 +348,35 @@ class DBAdmin:
         self.conn.commit()
     # _____________________________
 
-    def resetdb(self, dbname, logger=None):
-
-        if logger is None:
-            lg = self.logger
-        else:
-            lg = logger
-        lg.info("Resetting DB: {}".format(dbname))
-
+    def resetdb(self):
         self.revoke_connect_from_db()
         self.dropdb()
         self.createdb()
         self.grant_connect_to_db()
     # ___________________________
 
-    def revoke_connect_from_db(self, dbname, dbuser):
+    def revoke_connect_from_db(self, dbname=None, dbuser=None):
+        if dbname is None:
+            dbname = self.dbname
+
+        if dbuser is None:
+            dbuser = self.dbuser
+
         try:
             dburi = Config.db_connection_uri(dbname, dbuser)
             conn = self.connectdb(dburi)
             cursor = conn.cursor()
             conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+
             query = """
-                REVOKE CONNECT ON DATABASE %s FROM %s
+                SELECT pg_terminate_backend(pg_stat_activity.pid)
+                FROM pg_stat_activity
+                WHERE pg_stat_activity.datname = %s
+                AND pid <> pg_backend_pid();
             """
-            params = (AsIs(dbname), AsIs(self.conf['PROJECT_USER']))
+            params = (dbname, )
             cursor.execute(query, params)
+            conn.commit()
         except psycopg2.ProgrammingError as e:
             if 'does not exist' in str(e):
                 pass
