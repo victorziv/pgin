@@ -110,7 +110,7 @@ def connect_dba(migration):
 
 def create_pgin_metaschema(dba):
     dba.create_meta_schema()
-    dba.create_plan_table()
+#     dba.create_plan_table()
     dba.create_changes_table()
     dba.create_tags_table()
 # _____________________________________________
@@ -401,8 +401,6 @@ def init(migration, force=False):
 
     try:
         dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
-#         dba.dropdb()
-#         dba.createdb()
         dba.resetdb()
         dba = connect_dba(migration)
         create_pgin_metaschema(dba)

@@ -142,7 +142,7 @@ class DBAdmin:
                tag VARCHAR(100) UNIQUE,
                msg TEXT,
                tagged TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL,
-               FOREIGN KEY(changeid) REFERENCES %s.changes(changeid) ON DELETE CASCADE
+               FOREIGN KEY(changeid) REFERENCES %s.changes(changeid) ON UPDATE CASCADE
            )
         """
         params = [AsIs(self.meta_schema), AsIs(self.meta_schema)]
