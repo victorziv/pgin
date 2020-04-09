@@ -575,15 +575,13 @@ def tag_add(migration, tag, msg, change=None):
     change_line['tag'] = tag
     change_line['tagmsg'] = msg
 
-    with jsonlines.open(migration.plan, mode='w') as writer:
-        for l in lines:
-            writer.write(l)
+    write_plan(migration, lines)
 
     changeid = get_changeid(change_line['change'])
     dba = connect_dba(migration)
     dba.apply_tag(changeid, tag, msg)
 
-    click.echo("Tag {} applied to change {}".format(tag, change_line['change']))
+    click.echo(click.style("Tag '{}' was applied to change '{}'".format(tag, change_line['change']), fg='green'))
 # _____________________________________________
 
 
@@ -601,3 +599,41 @@ def tag_list(migration):
     tag_list = [(t['tag'], t['change'], t['msg']) for t in tags]
     click.echo(tabulate(tag_list, headers=['Tag', 'Change', 'Message']))
 # _____________________________________________
+
+
+@tag.command('remove')
+@click.option('-t', '--tag', required=True)
+@pass_migration
+def tag_remove(migration, tag):
+    """
+    Remove a tag.
+    """
+    os.chdir(migration.home)
+    dba = connect_dba(migration)
+    tag_change = dba.fetch_change_by_tag(tag)
+    if not tag_change:
+        click.echo(click.style('No change with tag {} was found.'.format(tag), fg='yellow'))
+        sys.exit(0)
+
+    click.echo("Tag {} is applied to change {}".format(tag, tag_change))
+    sure = input("Sure to remove? (Yes/No) ".format(tag)).lower()
+    if sure != 'y' and sure != 'yes':
+        click.echo("The tag was not removed")
+        sys.exit(0)
+
+    lines, change_ind = change_entry_or_last(migration, tag_change)
+    change_line = lines[change_ind]
+    del change_line['tag']
+    del change_line['tagmsg']
+
+    write_plan(migration, lines)
+
+    dba.remove_tag(tag)
+    click.echo(click.style("Tag '{}' was removed".format(tag), fg='green'))
+# _____________________________________________
+
+
+def write_plan(migration, lines):
+    with jsonlines.open(migration.plan, mode='w') as writer:
+        for l in lines:
+            writer.write(l)

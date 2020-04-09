@@ -280,6 +280,24 @@ class DBAdmin:
         return dict(fetch)['changeid']
     # ___________________________
 
+    def fetch_change_by_tag(self, tag):
+        query = """
+            SELECT
+                p.name AS change
+            FROM %s.tags t, %s.plan p
+            WHERE t.changeid = p.changeid
+            AND t.tag = %s
+        """
+        params = [AsIs(self.meta_schema), AsIs(self.meta_schema), tag]
+
+        self.cursor.execute(query, params)
+        fetch = self.cursor.fetchone()
+        if fetch is None:
+            return
+
+        return dict(fetch)['change']
+    # ___________________________
+
     def fetch_tags(self):
         query = """
             SELECT
@@ -376,6 +394,17 @@ class DBAdmin:
             WHERE name = %s
         """
         params = [AsIs(self.meta_schema), change]
+
+        self.cursor.execute(query, params)
+        self.conn.commit()
+    # _____________________________
+
+    def remove_tag(self, tag):
+        query = """
+            DELETE FROM %s.tags
+            WHERE tag = %s
+        """
+        params = [AsIs(self.meta_schema), tag]
 
         self.cursor.execute(query, params)
         self.conn.commit()
