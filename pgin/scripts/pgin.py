@@ -35,6 +35,32 @@ def get_version():
 # =====================================
 
 
+class MutuallyExclusiveOption(click.Option):
+    def __init__(self, *args, **kwargs):
+        self.mutually_exclusive = set(kwargs.pop('mutually_exclusive', []))
+        hlp = kwargs.get('help', '')
+
+        if self.mutually_exclusive:
+            ex_str = ', '.join(self.mutually_exclusive)
+            kwargs['help'] = '''
+                {}
+                NOTE: This argument is mutually exclusive with
+                arguments: [ {} ]
+                '''.format(hlp, ex_str)
+
+        super(MutuallyExclusiveOption, self).__init__(*args, **kwargs)
+    # ____________________________
+
+    def handle_parse_result(self, ctx, opts, args):
+        if self.mutually_exclusive.intersection(opts) and self.name in opts:
+            raise click.UsageError(
+                'Illegal usage: `{}` is mutually exclusive with'
+                'arguments `{}`'.format(self.name, ', '.join(self.mutually_exclusive)))
+
+        return super(MutuallyExclusiveOption, self).handle_parse_result(ctx, opts, args)
+# =========================================================
+
+
 class Migration(object):
 
     def __init__(self, home, project, project_user):
@@ -330,17 +356,18 @@ def add(migration, change, msg):
 
 
 @cli.command()
-@click.option('-c', '--change', 'upto_change', required=False)
+@click.option('-c', '--change', 'upto_change', cls=MutuallyExclusiveOption, mutually_exclusive=['upto_tag'])
+@click.option('-t', '--tag', 'upto_tag', cls=MutuallyExclusiveOption, mutually_exclusive=['upto_change'])
 @pass_migration
-def deploy(migration, upto_change=None):
+def deploy(migration, upto_change=None, upto_tag=None):
     """
     Deploys pending changes
     """
 
     if upto_change is None:
         msg = 'Deploying all pending changes to %s' % migration.project
-    else:
 
+    else:
         if not change_is_planned(migration, upto_change):
             click.echo("Change {} is not found in migration plan".format(upto_change))
             sys.exit(1)
