@@ -192,31 +192,10 @@ def not_remove_if_false(ctx, param, value):
 # _____________________________________________
 
 
-def remove_from_meta_plan(migration, change):
-    dba = connect_dba(migration)
-    dba.remove_change_from_plan(change)
-# _____________________________________________
-
-
 def remove_from_plan(migration, change):
-    try:
-        fpr = open(migration.plan)
-        reader = jsonlines.Reader(fpr)
-
-        tmp_plan = "tmp-%s" % migration.plan_name
-        tmp_plan_path = os.path.join(os.path.dirname(migration.plan), tmp_plan)
-        fpw = open(tmp_plan_path, 'w')
-        writer = jsonlines.Writer(fpw)
-
-        for l in reader:
-            if l['change'] == change:
-                continue
-            writer.write(l)
-
-    finally:
-        fpr.close()
-        fpw.close()
-        os.rename(tmp_plan_path, migration.plan)
+    lines, change_ind = change_entry_or_last(migration, change)
+    lines.pop(change_ind)
+    write_plan(migration, lines)
 # _____________________________________________
 
 
@@ -345,34 +324,34 @@ def add(migration, change, msg):
     for direction in ['deploy', 'revert']:
         if not script_exists(migration, direction, change):
             create_script(migration, direction, change)
+
+    click.echo(click.style('Change {} has been added'.format(change), fg='green'))
 # _____________________________________________
 
 
 @cli.command()
-@click.argument('upto', required=False)
+@click.option('-c', '--change', 'upto_change', required=False)
 @pass_migration
-def deploy(migration, upto=None):
+def deploy(migration, upto_change=None):
     """
     Deploys pending changes
     """
 
-    if upto is None:
+    if upto_change is None:
         msg = 'Deploying all pending changes to %s' % migration.project
     else:
 
-        if not change_is_planned(migration, upto):
-            click.echo("Change {} is not found in migration plan".format(upto))
+        if not change_is_planned(migration, upto_change):
+            click.echo("Change {} is not found in migration plan".format(upto_change))
             sys.exit(1)
 
-        msg = 'Deploying pending changes to %s. Last change to deploy: %s' % (migration.project, upto)
+        msg = 'Deploying pending changes to %s. Last change to deploy: %s' % (migration.project, upto_change)
 
     click.echo(msg)
 
     try:
         dba = connect_dba(migration)
-
         with jsonlines.open(migration.plan, mode='r') as reader:
-
             for l in reader:
                 change = l['change']
                 deploy, changeid = get_change_deploy(migration, dba, change)
@@ -387,7 +366,7 @@ def deploy(migration, upto=None):
                     dba.apply_tag(changeid, l['tag'], l['tagmsg'])
 
                 click.echo(click.style('ok', fg='green'))
-                if change == upto:
+                if change == upto_change:
                     break
 
     except psycopg2.ProgrammingError as pe:
@@ -461,7 +440,8 @@ def remove(migration, change):
 
     click.echo("Removing change %s from migration plan" % change)
     remove_from_plan(migration, change)
-    remove_from_meta_plan(migration, change)
+    dba = connect_dba(migration)
+    dba.remove_change_from_plan(change)
 
     for direction in ['deploy', 'revert']:
         remove_script(migration, direction, change)
