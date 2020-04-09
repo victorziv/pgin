@@ -561,10 +561,14 @@ def tag_add(migration, tag, msg, change=None):
     if 'tag' in change_line:
         click.echo(
             click.style(
-                'Tag {} already applied to change {}. Replacing with tag {}'.format(
-                    change_line['tag'], change_line['change'], tag),
-                fg='yellow')
+                'Tag {} already applied to change {}'.format(change_line['tag'], change_line['change']),
+                fg='yellow'
+            )
         )
+        sure = input("Sure to replace it with tag {}? (Yes/No) ".format(tag)).lower()
+        if sure != 'y' and sure != 'yes':
+            click.echo("Tag was not replaced")
+            sys.exit(0)
 
     change_line['tag'] = tag
     change_line['tagmsg'] = msg
