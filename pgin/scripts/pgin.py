@@ -140,11 +140,12 @@ def create_pgin_metaschema(dba):
     dba.create_meta_schema()
     dba.create_plan_table()
     dba.create_changes_table()
-    dba.create_tags_table()
+#     dba.create_tags_table()
 # _____________________________________________
 
 
 def disconnect_dba(dba):
+    dba.cursor.close()
     dba.conn.close()
 # _____________________________________________
 
@@ -356,52 +357,63 @@ def add(migration, change, msg):
 
 
 @cli.command()
-@click.option('-c', '--change', 'upto_change', cls=MutuallyExclusiveOption, mutually_exclusive=['upto_tag'])
-@click.option('-t', '--tag', 'upto_tag', cls=MutuallyExclusiveOption, mutually_exclusive=['upto_change'])
+@click.option('-c', '--change', 'upto_change_name', cls=MutuallyExclusiveOption, mutually_exclusive=['upto_tag_name'])
+@click.option(
+    '-t', '--tag', 'upto_tag_name', cls=MutuallyExclusiveOption, mutually_exclusive=['upto_change_name'])
 @pass_migration
-def deploy(migration, upto_change=None, upto_tag=None):
+def deploy(migration, upto_change_name=None, upto_tag_name=None):
     """
     Deploys pending changes
     """
 
-    if upto_change is None:
-        msg = 'Deploying all pending changes to %s' % migration.project
-
-    else:
-        if not change_is_planned(migration, upto_change):
-            click.echo("Change {} is not found in migration plan".format(upto_change))
-            sys.exit(1)
-
-        msg = 'Deploying pending changes to %s. Last change to deploy: %s' % (migration.project, upto_change)
-
-    click.echo(msg)
-
     try:
         dba = connect_dba(migration)
-        with jsonlines.open(migration.plan, mode='r') as reader:
-            for l in reader:
-                change = l['change']
-                deploy, changeid = get_change_deploy(migration, dba, change)
 
-                if change_deployed(migration, change):
-                    continue
+        if upto_change_name is None and upto_tag_name is None:
+            msg = 'Deploying all pending changes to %s' % migration.project
 
-                click.echo(message="+ %s %s " % (change, '.' * (MSG_LENGTH - len(change))), nl=False)
-                deploy()
-                dba.apply_change(changeid, change)
-                if 'tag' in l:
-                    dba.apply_tag(changeid, l['tag'], l['tagmsg'])
+        if upto_change_name is not None:
+            msg = 'Deploying pending changes to %s. Last change to deploy: %s' % (migration.project, upto_change_name)
+            change_name = upto_change_name
 
-                click.echo(click.style('ok', fg='green'))
-                if change == upto_change:
-                    break
+        if upto_tag_name is not None:
+            print("XXX tag type: {}".format(type(upto_tag_name)))
+            change_name = dba.fetch_change_by_tag(upto_tag_name)
+            msg = 'Deploying pending changes to %s. Last tag to deploy: %s' % (migration.project, upto_tag_name)
+            print("XXX upto_change_name: {}".format(change_name))
+
+        lines, change_ind = change_entry_or_last(migration, change_name)
+        upto_change = lines[change_ind]
+
+        if not plan_record_exists(migration, upto_change['change']):
+            click.echo(click.style("Change {} is not found in migration plan".format(upto_change), fg='yellow'))
+            sys.exit(1)
+
+        click.echo(msg)
+
+        for l in lines:
+            change = l['change']
+            deploy, changeid = get_change_deploy(migration, dba, change)
+
+            if change_deployed(migration, change):
+                continue
+
+            click.echo(message="+ {} {} ".format(change, '.' * (MSG_LENGTH - len(change))), nl=False)
+            deploy()
+            dba.apply_change(changeid, change)
+            if 'tag' in l:
+                dba.apply_tag(changeid, l['tag'], l['tagmsg'])
+
+            click.echo(click.style('ok', fg='green'))
+            if change == upto_change['change']:
+                break
 
     except psycopg2.ProgrammingError as pe:
         click.echo(click.style('fail', fg='red'))
         click.echo("!!! Error in deploy: {}".format(pe))
-    except Exception as e:
-        click.echo(click.style('fail', fg='red'))
-        logger.error("Exception in deploy: %s", e)
+        logger.exception('Exception in deploy')
+    except Exception:
+        logger.exception('Exception in deploy')
     finally:
         disconnect_dba(dba)
 # _____________________________________________
@@ -436,8 +448,7 @@ def init(migration, force=False):
         dba = connect_dba(migration)
         create_pgin_metaschema(dba)
     finally:
-        dba.cursor.close()
-        dba.conn.close()
+        disconnect_dba(dba)
 
     if os.path.exists(migration.plan) and not force:
         click.echo("Migration plan {} already exists".format(migration.plan))
@@ -467,8 +478,11 @@ def remove(migration, change):
 
     click.echo("Removing change %s from migration plan" % change)
     remove_from_plan(migration, change)
-    dba = connect_dba(migration)
-    dba.remove_change_from_plan(change)
+    try:
+        dba = connect_dba(migration)
+        dba.remove_change_from_plan(change)
+    finally:
+        disconnect_dba(dba)
 
     for direction in ['deploy', 'revert']:
         remove_script(migration, direction, change)
@@ -567,6 +581,16 @@ def tag_add(migration, tag, msg, change=None):
     os.chdir(migration.home)
     lines, change_ind = change_entry_or_last(migration, change)
     change_line = lines[change_ind]
+
+    if not change_deployed(migration, change_line['change']):
+        click.echo(
+            click.style(
+                'Can not apply a tag to undeployed change `{}`'.format(change_line['change']),
+                fg='yellow'
+            )
+        )
+        sys.exit(1)
+
     if 'tag' in change_line:
         click.echo(
             click.style(

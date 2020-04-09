@@ -159,7 +159,10 @@ class DBAdmin:
                changeid CHAR(40) PRIMARY KEY,
                name VARCHAR(100) UNIQUE,
                planned TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL,
-               msg TEXT
+               msg TEXT,
+               tag VARCHAR(100) UNIQUE,
+               tagmsg TEXT,
+               tagged TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL
            )
         """
         params = [AsIs(self.meta_schema)]
@@ -281,6 +284,7 @@ class DBAdmin:
     # ___________________________
 
     def fetch_change_by_tag(self, tag):
+        print("YYY tag: {}".format(tag))
         query = """
             SELECT
                 p.name AS change
@@ -292,6 +296,7 @@ class DBAdmin:
 
         self.cursor.execute(query, params)
         fetch = self.cursor.fetchone()
+        print("YYY fetch: {}".format(fetch))
         if fetch is None:
             return
 
