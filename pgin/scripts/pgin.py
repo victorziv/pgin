@@ -6,8 +6,10 @@ import click
 import jsonlines
 import psycopg2
 from jinja2 import Environment, FileSystemLoader
-
+from tabulate import tabulate
 from config import Config, Configurator
+# =================================================
+
 runtype = os.getenv('%s_CONFIG' % Config.PROJECT.upper())
 if runtype is None:
     print("ERROR: $%s_CONFIG env. variable is not set" % Config.PROJECT.upper())
@@ -596,8 +598,6 @@ def tag_list(migration):
     dba = connect_dba(migration)
     tags = dba.fetch_tags()
 
-    click.echo("Tag\tChange\tMessage")
-    click.echo("----------------------------")
-    for tag in tags:
-        click.echo("{}\t{}\t{}".format(tag['tag'], tag['change'], tag['msg']))
+    tag_list = [(t['tag'], t['change'], t['msg']) for t in tags]
+    click.echo(tabulate(tag_list, headers=['Tag', 'Change', 'Message']))
 # _____________________________________________
