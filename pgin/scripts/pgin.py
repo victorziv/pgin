@@ -370,15 +370,20 @@ def deploy(migration, upto_change_name=None, upto_tag_name=None):
         dba = connect_dba(migration)
 
         if upto_change_name is None and upto_tag_name is None:
-            msg = 'Deploying all pending changes to %s' % migration.project
+            msg = "Deploying all pending changes to '{}'" % migration.project
 
         if upto_change_name is not None:
-            msg = 'Deploying pending changes to %s. Last change to deploy: %s' % (migration.project, upto_change_name)
+            msg = "Deploying pending changes to '{}'. Last change to deploy: {}".format(
+                migration.project, upto_change_name)
 
         if upto_tag_name is not None:
             upto_change_name = dba.fetch_change_by_tag(upto_tag_name)
-            msg = 'Deploying pending changes to %s. Last tag to deploy: %s' % (migration.project, upto_tag_name)
-            print("XXX upto_change_name: {}".format(upto_change_name))
+
+            if upto_change_name is None:
+                click.echo(click.style("Tag '{}' is not found".format(upto_tag_name, fg='yellow')))
+                sys.exit(1)
+
+            msg = "Deploying pending changes to '{}'. Last tag to deploy: '{}'".format(migration.project, upto_tag_name)
 
         lines, change_ind = change_entry_or_last(migration, upto_change_name)
         upto_change = lines[change_ind]
@@ -648,7 +653,7 @@ def tag_remove(migration, tag):
     dba = connect_dba(migration)
     tag_change = dba.fetch_change_by_tag(tag)
     if not tag_change:
-        click.echo(click.style('No change with tag {} was found.'.format(tag), fg='yellow'))
+        click.echo(click.style('No change with tag `{}` was found.'.format(tag), fg='yellow'))
         sys.exit(0)
 
     click.echo("Tag {} is applied to change {}".format(tag, tag_change))

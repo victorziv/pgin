@@ -305,19 +305,15 @@ class DBAdmin:
     # ___________________________
 
     def fetch_change_by_tag(self, tag):
-        print("YYY tag: {}".format(tag))
         query = """
-            SELECT
-                p.name AS change
-            FROM %s.tags t, %s.plan p
-            WHERE t.changeid = p.changeid
-            AND t.tag = %s
+            SELECT name AS change
+            FROM %s.plan
+            WHERE tag = %s
         """
-        params = [AsIs(self.meta_schema), AsIs(self.meta_schema), tag]
+        params = [AsIs(self.meta_schema), tag]
 
         self.cursor.execute(query, params)
         fetch = self.cursor.fetchone()
-        print("YYY fetch: {}".format(fetch))
         if fetch is None:
             return
 
