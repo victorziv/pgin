@@ -272,6 +272,27 @@ class DBAdmin:
         return [dict(f) for f in fetch]
     # ___________________________
 
+    def fetch_last_deployed_change(self):
+        query = """
+            SELECT
+                changeid,
+                name,
+                applied
+
+            FROM %s.changes
+            ORDER BY applied DESC
+            LIMIT 1
+        """
+        params = [AsIs(self.meta_schema)]
+
+        self.cursor.execute(query, params)
+        fetch = self.cursor.fetchone()
+        if fetch is None:
+            return
+
+        return dict(fetch)
+    # ___________________________
+
     def fetch_deployed_changeid_by_name(self, change):
         query = """
             SELECT changeid

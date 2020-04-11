@@ -140,7 +140,6 @@ def create_pgin_metaschema(dba):
     dba.create_meta_schema()
     dba.create_plan_table()
     dba.create_changes_table()
-#     dba.create_tags_table()
 # _____________________________________________
 
 
@@ -258,6 +257,42 @@ def plan_record_exists(migration, change):
     if change_is_planned(migration, change):
         return True
     return False
+# _____________________________________________
+
+
+def set_tag(migration, tag, msg, change):
+    lines = []
+    with jsonlines.open(migration.plan) as reader:
+        tag_set = False
+        for l in reader:
+            if l['change'] == change:
+                l['tag'] = tag
+                l['tagmsg'] = msg
+                tag_set = True
+            lines.append(l)
+
+        if not tag_set:
+            last = lines[-1]
+            change = last['change']
+            last['tag'] = tag
+            last['tagmsg'] = msg
+
+    with jsonlines.open(migration.plan, mode='w') as writer:
+        for l in lines:
+            writer.write(l)
+
+    changeid = get_changeid(change)
+    dba = connect_dba(migration)
+    dba.apply_tag(changeid, tag, msg)
+
+    click.echo("Tag {} applied to change {}".format(tag, change))
+# _____________________________________________
+
+
+def write_plan(migration, lines):
+    with jsonlines.open(migration.plan, mode='w') as writer:
+        for l in lines:
+            writer.write(l)
 # _____________________________________________
 
 
@@ -547,39 +582,27 @@ def revert(migration, downto_change=None, downto_tag=None):
 # _____________________________________________
 
 
-def set_tag(migration, tag, msg, change):
-    lines = []
-    with jsonlines.open(migration.plan) as reader:
-        tag_set = False
-        for l in reader:
-            if l['change'] == change:
-                l['tag'] = tag
-                l['tagmsg'] = msg
-                tag_set = True
-            lines.append(l)
+@cli.command()
+@pass_migration
+def status(migration):
+    """
+    Report deployment status
+    """
 
-        if not tag_set:
-            last = lines[-1]
-            change = last['change']
-            last['tag'] = tag
-            last['tagmsg'] = msg
+    try:
+        dba = connect_dba(migration)
+        click.echo("# On database: {}".format(migration.project))
 
-    with jsonlines.open(migration.plan, mode='w') as writer:
-        for l in lines:
-            writer.write(l)
+        last_deployed_change = dba.fetch_last_deployed_change()
+        if last_deployed_change:
+            click.echo("# Change ID: {}".format(last_deployed_change['changeid']))
+            click.echo("# Change name: {}".format(last_deployed_change['name']))
+            dt = datetime.datetime.strptime(list_deployed_change['applied'], '%Y-%m-%d %H:%M:%S.%f')
 
-    changeid = get_changeid(change)
-    dba = connect_dba(migration)
-    dba.apply_tag(changeid, tag, msg)
-
-    click.echo("Tag {} applied to change {}".format(tag, change))
+#         click.echo(tabulate(tag_list, headers=['Change', 'Tag', 'Message'], floatfmt=".1f"))
+    finally:
+        disconnect_dba(dba)
 # _____________________________________________
-
-
-def write_plan(migration, lines):
-    with jsonlines.open(migration.plan, mode='w') as writer:
-        for l in lines:
-            writer.write(l)
 
 
 @cli.group()
