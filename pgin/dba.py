@@ -323,14 +323,14 @@ class DBAdmin:
     def fetch_tags(self):
         query = """
             SELECT
-                t.tag,
-                t.msg,
-                p.name AS change
-            FROM %s.tags t, %s.plan p
-            WHERE t.changeid = p.changeid
-            ORDER BY t.tag
+                tag,
+                tagmsg,
+                name AS change
+            FROM  %s.plan
+            WHERE tag is not NULL
+            ORDER BY tag
         """
-        params = [AsIs(self.meta_schema), AsIs(self.meta_schema)]
+        params = [AsIs(self.meta_schema)]
 
         self.cursor.execute(query, params)
         fetch = self.cursor.fetchall()

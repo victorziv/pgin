@@ -651,9 +651,8 @@ def tag_list(migration):
 
     dba = connect_dba(migration)
     tags = dba.fetch_tags()
-
-    tag_list = [(t['tag'], t['change'], t['msg']) for t in tags]
-    click.echo(tabulate(tag_list, headers=['Tag', 'Change', 'Message']))
+    tag_list = [(t['change'], t['tag'], t['tagmsg']) for t in tags]
+    click.echo(tabulate(tag_list, headers=['Change', 'Tag', 'Message'], floatfmt=".1f"))
 # _____________________________________________
 
 
