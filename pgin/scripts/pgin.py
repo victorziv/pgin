@@ -352,7 +352,7 @@ def add(migration, change, msg):
         if not script_exists(migration, direction, change):
             create_script(migration, direction, change)
 
-    click.echo(click.style('Change {} has been added'.format(change), fg='green'))
+    click.echo(click.style('Change `{}` has been added'.format(change), fg='green'))
 # _____________________________________________
 
 
@@ -374,19 +374,18 @@ def deploy(migration, upto_change_name=None, upto_tag_name=None):
 
         if upto_change_name is not None:
             msg = 'Deploying pending changes to %s. Last change to deploy: %s' % (migration.project, upto_change_name)
-            change_name = upto_change_name
 
         if upto_tag_name is not None:
-            print("XXX tag type: {}".format(type(upto_tag_name)))
-            change_name = dba.fetch_change_by_tag(upto_tag_name)
+            upto_change_name = dba.fetch_change_by_tag(upto_tag_name)
             msg = 'Deploying pending changes to %s. Last tag to deploy: %s' % (migration.project, upto_tag_name)
-            print("XXX upto_change_name: {}".format(change_name))
+            print("XXX upto_change_name: {}".format(upto_change_name))
 
-        lines, change_ind = change_entry_or_last(migration, change_name)
+        lines, change_ind = change_entry_or_last(migration, upto_change_name)
         upto_change = lines[change_ind]
 
         if not plan_record_exists(migration, upto_change['change']):
-            click.echo(click.style("Change {} is not found in migration plan".format(upto_change), fg='yellow'))
+            click.echo(click.style(
+                "Change `{}` is not found in migration plan".format(upto_change['change']), fg='yellow'))
             sys.exit(1)
 
         click.echo(msg)
