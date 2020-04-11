@@ -47,16 +47,54 @@ class DBAdmin:
         self.conn.commit()
     # _____________________________
 
+#     def apply_tag(self, changeid, tag, msg):
+#         query = """
+#             INSERT INTO %s.tags
+#             (changeid, tag, msg, tagged)
+#             VALUES
+#             (%s, %s, %s, %s)
+#             ON CONFLICT(changeid)
+#             DO UPDATE
+#             SET
+#                 tag = %s,
+#                 msg = %s,
+#                 tagged = %s
+#             WHERE %s.tags.changeid = %s
+#         """
+#         params = [
+#             AsIs(self.meta_schema),
+#             changeid,
+#             tag,
+#             msg,
+#             datetime.datetime.utcnow(),
+
+#             tag,
+#             msg,
+#             datetime.datetime.utcnow(),
+#             AsIs(self.meta_schema),
+#             changeid,
+#         ]
+
+#         self.cursor.execute(query, params)
+#         self.conn.commit()
+    # _____________________________
+
     def apply_tag(self, changeid, tag, msg):
         query = """
-            INSERT INTO %s.tags
-            (changeid, tag, msg, tagged)
-            VALUES
-            (%s, %s, %s, %s)
-            ON CONFLICT(changeid)
-            DO NOTHING
+            UPDATE %s.plan
+            SET
+                tag = %s,
+                tagmsg = %s,
+                tagged = %s
+            WHERE changeid = %s
         """
-        params = [AsIs(self.meta_schema), changeid, tag, msg, datetime.datetime.utcnow()]
+        params = [
+            AsIs(self.meta_schema),
+            tag,
+            msg,
+            datetime.datetime.utcnow(),
+            changeid
+        ]
 
         self.cursor.execute(query, params)
         self.conn.commit()
@@ -142,7 +180,10 @@ class DBAdmin:
                changeid CHAR(40) PRIMARY KEY,
                name VARCHAR(100) UNIQUE,
                planned TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL,
-               msg TEXT
+               msg TEXT,
+               tag VARCHAR(100) UNIQUE,
+               tagmsg TEXT,
+               tagged TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL
            )
         """
         params = [AsIs(self.meta_schema)]
@@ -231,6 +272,27 @@ class DBAdmin:
         return [dict(f) for f in fetch]
     # ___________________________
 
+    def fetch_last_deployed_change(self):
+        query = """
+            SELECT
+                changeid,
+                name,
+                applied
+
+            FROM %s.changes
+            ORDER BY applied DESC
+            LIMIT 1
+        """
+        params = [AsIs(self.meta_schema)]
+
+        self.cursor.execute(query, params)
+        fetch = self.cursor.fetchone()
+        if fetch is None:
+            return
+
+        return dict(fetch)
+    # ___________________________
+
     def fetch_deployed_changeid_by_name(self, change):
         query = """
             SELECT changeid
@@ -261,6 +323,42 @@ class DBAdmin:
             return
 
         return dict(fetch)['changeid']
+    # ___________________________
+
+    def fetch_change_by_tag(self, tag):
+        query = """
+            SELECT name AS change
+            FROM %s.plan
+            WHERE tag = %s
+        """
+        params = [AsIs(self.meta_schema), tag]
+
+        self.cursor.execute(query, params)
+        fetch = self.cursor.fetchone()
+        if fetch is None:
+            return
+
+        return dict(fetch)['change']
+    # ___________________________
+
+    def fetch_tags(self):
+        query = """
+            SELECT
+                tag,
+                tagmsg,
+                name AS change
+            FROM  %s.plan
+            WHERE tag is not NULL
+            ORDER BY tag
+        """
+        params = [AsIs(self.meta_schema)]
+
+        self.cursor.execute(query, params)
+        fetch = self.cursor.fetchall()
+        if fetch is None:
+            return []
+
+        return [dict(f) for f in fetch]
     # ___________________________
 
     def grant_connect_to_db(self, dbname=None, dbuser=None):
@@ -336,6 +434,21 @@ class DBAdmin:
     def remove_change_from_plan(self, change):
         query = """
             DELETE FROM %s.plan
+            WHERE name = %s
+        """
+        params = [AsIs(self.meta_schema), change]
+
+        self.cursor.execute(query, params)
+        self.conn.commit()
+    # _____________________________
+
+    def remove_tag(self, change):
+        query = """
+            UPDATE %s.plan
+            SET
+                tag = NULL,
+                tagmsg = NULL,
+                tagged = NULL
             WHERE name = %s
         """
         params = [AsIs(self.meta_schema), change]

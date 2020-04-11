@@ -16,13 +16,14 @@ setup(
     name=APP,
     version=read_version(),
     py_modules=[APP],
-    description='Very dedicated PostgreSQL migration utility using Python',
+    description='Very dedicated PostgreSQL DB migration utility. Using Python 3.6+ and psycopg2',
     install_requires=[
         'jinja2',
-        'psycopg2-binary',
+        'psycopg2',
         'click',
         'jsonlines',
-        'colorama'
+        'colorama',
+        'tabulate'
     ],
 
     entry_points='''
