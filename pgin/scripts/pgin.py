@@ -5,6 +5,7 @@ import importlib
 import click
 import jsonlines
 import psycopg2
+import datetime
 from jinja2 import Environment, FileSystemLoader
 from tabulate import tabulate
 from config import Config, Configurator
@@ -328,6 +329,11 @@ def update_plan(migration, change, msg):
             'change': change,
             'msg': msg,
         })
+# _____________________________________________
+
+
+def utc_to_local(utc_dt):
+    return utc_dt.replace(tzinfo=datetime.timezone.utc).astimezone(tz=None)
 
 # ============= Commands ==================
 
@@ -595,11 +601,25 @@ def status(migration):
 
         last_deployed_change = dba.fetch_last_deployed_change()
         if last_deployed_change:
-            click.echo("# Change ID: {}".format(last_deployed_change['changeid']))
-            click.echo("# Change name: {}".format(last_deployed_change['name']))
-            dt = datetime.datetime.strptime(list_deployed_change['applied'], '%Y-%m-%d %H:%M:%S.%f')
+            click.echo("# Last Change ID: {}".format(last_deployed_change['changeid']))
+            click.echo("# Last Change Name: {}".format(last_deployed_change['name']))
+            dt = utc_to_local(last_deployed_change['applied']).strftime('%Y-%m-%d %H:%M:%S')
+            click.echo("# Applied: {}".format(dt))
+            click.echo('')
 
-#         click.echo(tabulate(tag_list, headers=['Change', 'Tag', 'Message'], floatfmt=".1f"))
+        lines, _ = change_entry_or_last(migration, None)
+        undeployed = []
+        for l in lines:
+            if not change_deployed(migration, l['change']):
+                undeployed.append(l)
+
+        if len(undeployed):
+            tablist = [(c['change'], c['msg'], c.get('tag'), c.get('tagmsg')) for c in undeployed]
+            click.echo("Undeployed changes:")
+            click.echo("")
+            click.echo(tabulate(tablist, headers=['Change', 'Message', 'Tag', 'Tag Message'], floatfmt=".1f"))
+        else:
+            click.echo("Nothing to deploy (up-to-date)")
     finally:
         disconnect_dba(dba)
 # _____________________________________________
@@ -629,15 +649,6 @@ def tag_add(migration, tag, msg, change=None):
     os.chdir(migration.home)
     lines, change_ind = change_entry_or_last(migration, change)
     change_line = lines[change_ind]
-
-#     if not change_deployed(migration, change_line['change']):
-#         click.echo(
-#             click.style(
-#                 'Can not apply a tag to undeployed change `{}`'.format(change_line['change']),
-#                 fg='yellow'
-#             )
-#         )
-#         sys.exit(1)
 
     if 'tag' in change_line:
         click.echo(
