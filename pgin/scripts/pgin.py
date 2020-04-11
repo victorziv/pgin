@@ -657,6 +657,7 @@ def tag_list(migration):
 
 
 @tag.command('remove')
+@click.option('-y', '--yes', is_flag=True, callback=not_remove_if_false, expose_value=False, prompt='Remove tag?')
 @click.option('-t', '--tag', required=True)
 @pass_migration
 def tag_remove(migration, tag):
@@ -667,14 +668,10 @@ def tag_remove(migration, tag):
     dba = connect_dba(migration)
     tag_change = dba.fetch_change_by_tag(tag)
     if not tag_change:
-        click.echo(click.style('No change with tag `{}` was found.'.format(tag), fg='yellow'))
+        click.echo(click.style("No change with tag '{}' was found".format(tag), fg='yellow'))
         sys.exit(0)
 
-    click.echo("Tag {} is applied to change {}".format(tag, tag_change))
-    sure = input("Sure to remove? (Yes/No) ".format(tag)).lower()
-    if sure != 'y' and sure != 'yes':
-        click.echo("The tag was not removed")
-        sys.exit(0)
+    click.echo("Removing tag '{}' applied to change {}".format(tag, tag_change))
 
     lines, change_ind = change_entry_or_last(migration, tag_change)
     change_line = lines[change_ind]
@@ -683,6 +680,6 @@ def tag_remove(migration, tag):
 
     write_plan(migration, lines)
 
-    dba.remove_tag(tag)
+    dba.remove_tag(tag_change)
     click.echo(click.style("Tag '{}' was removed".format(tag), fg='green'))
 # _____________________________________________

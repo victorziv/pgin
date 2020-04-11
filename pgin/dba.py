@@ -421,12 +421,16 @@ class DBAdmin:
         self.conn.commit()
     # _____________________________
 
-    def remove_tag(self, tag):
+    def remove_tag(self, change):
         query = """
-            DELETE FROM %s.tags
-            WHERE tag = %s
+            UPDATE %s.plan
+            SET
+                tag = NULL,
+                tagmsg = NULL,
+                tagged = NULL
+            WHERE name = %s
         """
-        params = [AsIs(self.meta_schema), tag]
+        params = [AsIs(self.meta_schema), change]
 
         self.cursor.execute(query, params)
         self.conn.commit()
