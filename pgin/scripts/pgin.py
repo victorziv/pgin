@@ -370,7 +370,7 @@ def deploy(migration, upto_change_name=None, upto_tag_name=None):
         dba = connect_dba(migration)
 
         if upto_change_name is None and upto_tag_name is None:
-            msg = "Deploying all pending changes to '{}'" % migration.project
+            msg = "Deploying all pending changes to '{}'".format(migration.project)
 
         if upto_change_name is not None:
             msg = "Deploying pending changes to '{}'. Last change to deploy: {}".format(
@@ -495,21 +495,36 @@ def remove(migration, change):
 
 @cli.command()
 @click.option('-y', '--yes', is_flag=True, callback=not_revert_if_false, expose_value=False, prompt='Revert?')
-@click.argument('downto', required=False)
 @pass_migration
-def revert(migration, downto=None):
+@click.option('-c', '--change', 'downto_change', cls=MutuallyExclusiveOption, mutually_exclusive=['downto_tag'])
+@click.option(
+    '-t', '--tag', 'downto_tag', cls=MutuallyExclusiveOption, mutually_exclusive=['downto_change'])
+def revert(migration, downto_change=None, downto_tag=None):
     """
     Revert deployed
     """
-    if downto is None:
-        msg = 'Reverting all deployed changes from %s' % migration.project
-    else:
-        msg = 'Reverting deployed changes from %s. Last change to revert: %s' % (migration.project, downto)
-
-    click.echo(msg)
-
     try:
+
         dba = connect_dba(migration)
+
+        if downto_change is None and downto_tag is None:
+            msg = "Reverting all deployed changes from '{}'".format(migration.project)
+
+        if downto_change is not None:
+            msg = "Reverting deployed changes from '{}'. Last change to revert: '{}'".format(
+                migration.project, downto_change)
+
+        if downto_tag is not None:
+            downto_change = dba.fetch_change_by_tag(downto_tag)
+
+            if downto_change is None:
+                click.echo(click.style("Tag '{}' is not found".format(downto_tag, fg='yellow')))
+                sys.exit(1)
+
+            msg = "Reverting deployed changes from '{}'. Last tag to revert: '{}'".format(
+                migration.project, downto_tag)
+
+        click.echo(msg)
 
         changes = dba.fetch_deployed_changes()
 
@@ -521,7 +536,7 @@ def revert(migration, downto=None):
             revert()
             dba.remove_change(changeid)
             click.echo(click.style('ok', fg='green'))
-            if change == downto:
+            if change == downto_change:
                 break
 
     except Exception:
