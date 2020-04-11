@@ -557,6 +557,12 @@ def set_tag(migration, tag, msg, change):
 # _____________________________________________
 
 
+def write_plan(migration, lines):
+    with jsonlines.open(migration.plan, mode='w') as writer:
+        for l in lines:
+            writer.write(l)
+
+
 @cli.group()
 def tag():
     """
@@ -582,14 +588,14 @@ def tag_add(migration, tag, msg, change=None):
     lines, change_ind = change_entry_or_last(migration, change)
     change_line = lines[change_ind]
 
-    if not change_deployed(migration, change_line['change']):
-        click.echo(
-            click.style(
-                'Can not apply a tag to undeployed change `{}`'.format(change_line['change']),
-                fg='yellow'
-            )
-        )
-        sys.exit(1)
+#     if not change_deployed(migration, change_line['change']):
+#         click.echo(
+#             click.style(
+#                 'Can not apply a tag to undeployed change `{}`'.format(change_line['change']),
+#                 fg='yellow'
+#             )
+#         )
+#         sys.exit(1)
 
     if 'tag' in change_line:
         click.echo(
@@ -662,9 +668,3 @@ def tag_remove(migration, tag):
     dba.remove_tag(tag)
     click.echo(click.style("Tag '{}' was removed".format(tag), fg='green'))
 # _____________________________________________
-
-
-def write_plan(migration, lines):
-    with jsonlines.open(migration.plan, mode='w') as writer:
-        for l in lines:
-            writer.write(l)
