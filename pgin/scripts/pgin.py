@@ -94,15 +94,6 @@ def change_deployed(migration, change):
 # _____________________________________________
 
 
-def change_is_planned(migration, change):
-    dba = connect_dba(migration)
-    changeid = dba.fetch_planned_changeid_by_name(change)
-    if changeid is not None:
-        return True
-    return False
-# _____________________________________________
-
-
 def create_script(migration, direction, name):
     template_file = '%s.tmpl' % direction
     script_file = '%s.py' % name
@@ -167,6 +158,18 @@ def change_entry_or_last(migration, change):
             change_ind = -1
 
     return lines, change_ind
+# _____________________________________________
+
+
+def plan_file_entries(migration):
+    '''
+    If passed change is None, the last line index is returned
+    '''
+    lines = []
+    with jsonlines.open(migration.plan) as reader:
+        for l in reader:
+            lines.append(l)
+    return lines
 # _____________________________________________
 
 
@@ -255,10 +258,11 @@ def turn_to_python_package(path):
 # _____________________________________________
 
 
-def plan_record_exists(migration, change):
-    if change_is_planned(migration, change):
-        return True
-    return False
+def plan_record_exists(dba, migration, change):
+    changeid = dba.fetch_planned_changeid_by_name(change)
+    if changeid is None:
+        return False
+    return True
 # _____________________________________________
 
 
@@ -381,12 +385,12 @@ def add(migration, change, msg):
     """
 
     os.chdir(migration.home)
-    if plan_record_exists(migration, change):
+    dba = connect_dba(migration)
+    if plan_record_exists(dba, migration, change):
         click.echo(message='Change {} already exists in migration plan'.format(change))
         sys.exit(0)
 
     update_plan(migration, change, msg)
-    dba = connect_dba(migration)
     changeid = get_changeid(change)
     dba.apply_planned(changeid, change, msg)
 
@@ -430,7 +434,7 @@ def deploy(migration, upto_change_name=None, upto_tag_name=None):
         lines, change_ind = change_entry_or_last(migration, upto_change_name)
         upto_change = lines[change_ind]
 
-        if not plan_record_exists(migration, upto_change['change']):
+        if not plan_record_exists(dba, migration, upto_change['change']):
             click.echo(click.style(
                 "Change `{}` is not found in migration plan".format(upto_change['change']), fg='yellow'))
             sys.exit(1)
@@ -513,19 +517,19 @@ def remove(migration, change):
     Adds migration script to the plan
     """
 
-    os.chdir(migration.home)
-    if not plan_record_exists(migration, change):
-        click.echo("Change {} not found in migration plan".format(change))
-        sys.exit(0)
-
-    if change_deployed(migration, change):
-        click.echo("Cannot remove a deployed change {}. Revert first".format(change))
-        sys.exit(1)
-
-    click.echo("Removing change %s from migration plan" % change)
-    remove_from_plan(migration, change)
     try:
         dba = connect_dba(migration)
+        os.chdir(migration.home)
+        if not plan_record_exists(dba, migration, change):
+            click.echo("Change {} not found in migration plan".format(change))
+            sys.exit(0)
+
+        if change_deployed(migration, change):
+            click.echo("Cannot remove a deployed change {}. Revert first".format(change))
+            sys.exit(1)
+
+        click.echo("Removing change %s from migration plan" % change)
+        remove_from_plan(migration, change)
         dba.remove_change_from_plan(change)
     finally:
         disconnect_dba(dba)
@@ -537,30 +541,51 @@ def remove(migration, change):
 
 def figure_upto_change(dba, migration, upto):
     pat1 = re.compile(r'^HEAD$')
-    pat2 = re.compile(r'^HEAD~{1}$')
-    pat3 = re.compile(r'^HEAD~(\d+)$')
+    pat2 = re.compile(r'^HEAD~(\d+)$')
 
     if upto is None:
         msg = "Reverting all deployed changes from '{}'".format(migration.project)
         return upto, msg
 
     # check upto is tag
-    upto_change = dba.fetch_change_by_tag(upto)
-    if upto_change:
+    name = dba.fetch_change_by_tag(upto)
+    if name:
         msg = "Reverting deployed changes from '{}'. Last tag to revert: '{}'".format(
             migration.project, upto)
-        return upto_change, msg
-    
+        return name, msg
+
     # Figure out HEAD[~\d+] pattern passed
-    if pat1.match(upto_change):
+    changes = plan_file_entries(migration)
+    if pat1.match(upto):
         # last change
-        change = lines[-1]
+        name = changes[-1]['change']
         msg = "Reverting deployed changes from '{}'. Last change to revert: '{}'".format(
-            migration.project, upto_change)
+            migration.project, name)
+        return name, msg
 
+    match2 = pat2.match(upto)
+    if match2:
+        changes_back = match2.group(1)
+        # last change
+        try:
+            name = changes[-(int(changes_back) + 1)]['change']
+            msg = "Reverting deployed changes from '{}'. Last change to revert: '{}'".format(
+                migration.project, name)
+        except IndexError:
+            msg = "Reverting all deployed changes from '{}'".format(migration.project)
+            name = None
 
+        return name, msg
 
+    if plan_record_exists(dba, migration, upto):
+        msg = "Reverting deployed changes from '{}'. Last change to revert: '{}'".format(
+            migration.project, upto)
+        return upto, msg
+
+    click.echo(message="Change '{}' not found".format(upto))
+    sys.exit(0)
 # _____________________________________________
+
 
 @cli.command()
 @click.option('-y', '--yes', is_flag=True, callback=not_revert_if_false, expose_value=False, prompt='Revert?')
@@ -573,33 +598,21 @@ def revert(migration, upto=None):
     try:
 
         dba = connect_dba(migration)
-        upto_change = figure_upto_change(dba, migration, upto)
-
-
-        if downto_change is not None:
-
-
-        if downto_tag is not None:
-            downto_change = dba.fetch_change_by_tag(downto_tag)
-
-            if downto_change is None:
-                click.echo(click.style("Tag '{}' is not found".format(downto_tag, fg='yellow')))
-                sys.exit(1)
-
+        to, msg = figure_upto_change(dba, migration, upto)
 
         click.echo(msg)
 
         changes = dba.fetch_deployed_changes()
 
         for change_d in changes:
-            change = change_d['name']
+            name = change_d['name']
             changeid = change_d['changeid']
-            click.echo(message="- %s %s " % (change, '.' * (MSG_LENGTH - len(change))), nl=False)
-            revert = get_change_revert(migration, dba, change)
+            click.echo(message="- %s %s " % (name, '.' * (MSG_LENGTH - len(name))), nl=False)
+            revert = get_change_revert(migration, dba, name)
             revert()
             dba.remove_change(changeid)
             click.echo(click.style('ok', fg='green'))
-            if change == upto:
+            if name == to:
                 break
 
     except Exception:
@@ -607,61 +620,6 @@ def revert(migration, upto=None):
         logger.exception("Exception in revert")
     finally:
         disconnect_dba(dba)
-
-
-# @cli.command()
-# @click.option('-y', '--yes', is_flag=True, callback=not_revert_if_false, expose_value=False, prompt='Revert?')
-# @pass_migration
-# @click.option('-c', '--change', 'downto_change', cls=MutuallyExclusiveOption, mutually_exclusive=['downto_tag'])
-# @click.option(
-#     '-t', '--tag', 'downto_tag', cls=MutuallyExclusiveOption, mutually_exclusive=['downto_change'])
-# def revert(migration, downto_change=None, downto_tag=None):
-#     """
-#     Revert deployed
-#     """
-#     try:
-
-#         dba = connect_dba(migration)
-
-#         if downto_change is None and downto_tag is None:
-#             msg = "Reverting all deployed changes from '{}'".format(migration.project)
-
-#         if downto_change is not None:
-
-#             if 
-#             msg = "Reverting deployed changes from '{}'. Last change to revert: '{}'".format(
-#                 migration.project, downto_change)
-
-#         if downto_tag is not None:
-#             downto_change = dba.fetch_change_by_tag(downto_tag)
-
-#             if downto_change is None:
-#                 click.echo(click.style("Tag '{}' is not found".format(downto_tag, fg='yellow')))
-#                 sys.exit(1)
-
-#             msg = "Reverting deployed changes from '{}'. Last tag to revert: '{}'".format(
-#                 migration.project, downto_tag)
-
-#         click.echo(msg)
-
-#         changes = dba.fetch_deployed_changes()
-
-#         for change_d in changes:
-#             change = change_d['name']
-#             changeid = change_d['changeid']
-#             click.echo(message="- %s %s " % (change, '.' * (MSG_LENGTH - len(change))), nl=False)
-#             revert = get_change_revert(migration, dba, change)
-#             revert()
-#             dba.remove_change(changeid)
-#             click.echo(click.style('ok', fg='green'))
-#             if change == downto_change:
-#                 break
-
-#     except Exception:
-#         click.echo(click.style('fail', fg='red'))
-#         logger.exception("Exception in revert")
-#     finally:
-#         disconnect_dba(dba)
 # _____________________________________________
 
 
