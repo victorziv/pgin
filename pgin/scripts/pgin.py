@@ -471,8 +471,9 @@ def deploy(migration, upto_change_name=None, upto_tag_name=None):
 
 @cli.command()
 @click.option('-f', '--force', is_flag=True, required=False, help="Forcibly re-initiate DB and migration installment")
+@click.option('--newdb', is_flag=True, required=False, help="If set to TRUE drops and re-creates existent DB")
 @pass_migration
-def init(migration, force=False):
+def init(migration, force=False, newdb=False):
     """
         Initiates the project DB migrations.
     """
@@ -494,7 +495,13 @@ def init(migration, force=False):
 
     try:
         dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
-        dba.resetdb()
+        dba.revoke_connect_from_db()
+
+        if newdb:
+            dba.dropdb()
+
+        dba.createdb()
+        dba.grant_connect_to_db()
         dba = connect_dba(migration)
         create_pgin_metaschema(dba)
     finally:

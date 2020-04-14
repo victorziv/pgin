@@ -457,15 +457,6 @@ class DBAdmin:
         self.conn.commit()
     # _____________________________
 
-    def resetdb(self):
-        self.revoke_connect_from_db()
-
-#         self.dropdb()
-
-        self.createdb()
-        self.grant_connect_to_db()
-    # ___________________________
-
     def revoke_connect_from_db(self, dbname=None, dbuser=None):
         if dbname is None:
             dbname = self.dbname
