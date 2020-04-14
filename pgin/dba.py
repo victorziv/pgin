@@ -459,7 +459,9 @@ class DBAdmin:
 
     def resetdb(self):
         self.revoke_connect_from_db()
-        self.dropdb()
+
+#         self.dropdb()
+
         self.createdb()
         self.grant_connect_to_db()
     # ___________________________
