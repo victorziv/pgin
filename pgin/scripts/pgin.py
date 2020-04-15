@@ -6,6 +6,7 @@ import click
 import re
 import jsonlines
 import psycopg2
+import psycopg2.extras
 import datetime
 from jinja2 import Environment, FileSystemLoader
 from tabulate import tabulate
