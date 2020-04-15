@@ -125,6 +125,8 @@ def connect_dba(migration):
     dburi = Config.db_connection_uri(migration.project, migration.project_user)
     dba.conn = dba.connectdb(dburi)
     dba.cursor = dba.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    workschema = '%swork' % conf['PROJECT']
+    dba.set_search_path(workschema)
     return dba
 # _____________________________________________
 
@@ -471,30 +473,43 @@ def deploy(migration, upto_change_name=None, upto_tag_name=None):
 
 @cli.command()
 @click.option('-f', '--force', is_flag=True, required=False, help="Forcibly re-initiate DB and migration installment")
+@click.option('--newdb', is_flag=True, required=False, help="If set to TRUE drops and re-creates existent DB")
 @pass_migration
-def init(migration, force=False):
+def init(migration, force=False, newdb=False):
     """
         Initiates the project DB migrations.
     """
 
     logger.debug("Migration plan path: %r", migration.plan)
     if os.path.exists(migration.plan) and not force:
-        logger.info("Project %s migration facility already initiated", migration.project)
+        click.echo("Project '{}' migration facility already initiated".format(migration.project))
         sys.exit(0)
 
-    logger.info('Initiating project %s migrations', migration.project)
-    logger.info('Migration container path: %s', migration.home)
+    click.echo("Initiating project '{}' migrations".format(migration.project))
+    click.echo('Migration container path: {}'.format(migration.home))
     create_directory(migration.home)
     turn_to_python_package(migration.home)
 
     for d in ['deploy', 'revert']:
         create_directory(os.path.join(migration.home, d))
-        logger.info("Created %s/", d)
+        click.echo("Created {}/".format(d))
         turn_to_python_package(os.path.join(migration.home, d))
 
     try:
         dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
-        dba.resetdb()
+        dba.revoke_connect_from_db()
+
+        if newdb:
+            sure = input("Sure to drop existing DB {}? (Yes/No) ".format(migration.project).lower())
+            if sure in ['y', 'yes']:
+                click.echo("Dropping DB {}".format(migration.project))
+                dba.dropdb()
+            else:
+                click.echo("DB {} will not be dropped".format(migration.project))
+
+        click.echo("Creating DB {} if not already exists".format(migration.project))
+        dba.createdb()
+        dba.grant_connect_to_db()
         dba = connect_dba(migration)
         create_pgin_metaschema(dba)
     finally:

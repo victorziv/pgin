@@ -110,11 +110,11 @@ class DBAdmin:
         if newdb_owner is None:
             newdb_owner = self.dbuser
 
-        self.logger.info("Creating DB %s with owner %s", newdb, newdb_owner)
+        self.logger.debug("Creating DB %s with owner %s", newdb, newdb_owner)
 
         try:
             admin_db_uri = Config.db_connection_uri_admin(dbuser=newdb_owner)
-            self.logger.info("Admin DB URI: %r", admin_db_uri)
+            self.logger.debug("Admin DB URI: %r", admin_db_uri)
             admin_conn = self.connectdb(admin_db_uri)
             admin_cursor = admin_conn.cursor()
             admin_conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
@@ -122,22 +122,6 @@ class DBAdmin:
             # Create DB
             query = """CREATE DATABASE %(dbname)s WITH OWNER %(user)s"""
             params = {'dbname': AsIs(newdb), 'user': AsIs(newdb_owner)}
-            admin_cursor.execute(query, params)
-
-            # Reset search_path
-#             query = """
-#                 ALTER ROLE %s
-#                 RESET search_path;
-#             """
-#             params = [AsIs(self.dbuser)]
-#             admin_cursor.execute(query, params)
-
-            # Set search_path
-            query = """
-                ALTER DATABASE %(dbname)s
-                SET search_path TO %(dbname)s,public;
-            """
-            params = {'dbname': AsIs(newdb), 'user': AsIs(newdb)}
             admin_cursor.execute(query, params)
 
         except psycopg2.ProgrammingError as pe:
@@ -241,7 +225,7 @@ class DBAdmin:
 
         try:
             admin_db_uri = Config.db_connection_uri_admin(dbuser=self.dbuser)
-            self.logger.info("Admin DB URI: %r", admin_db_uri)
+            self.logger.debug("Admin DB URI: %r", admin_db_uri)
             admin_conn = self.connectdb(admin_db_uri)
             admin_cursor = admin_conn.cursor()
             admin_conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
@@ -392,20 +376,19 @@ class DBAdmin:
         self.conn.commit()
     # ___________________________
 
-    def init_app(self, app):
-        self.conn = self.connectdb(app.config['DB_CONN_URI'])
-        self.cursor = self.conn.cursor(cursor_factory=DictCursor)
-        self.show_search_path()
-        app.db = self
-        return app
+#     def init_app(self, app):
+#         self.conn = self.connectdb(app.config['DB_CONN_URI'])
+#         self.cursor = self.conn.cursor(cursor_factory=DictCursor)
+#         self.show_search_path()
+#         app.db = self
+#         return app
     # _____________________________
 
     def set_search_path(self, schema):
         query = """
-            ALTER DATABASE %s
             SET search_path=%s,public
         """
-        params = (AsIs(schema), AsIs(schema))
+        params = (AsIs(schema),)
         self.cursor.execute(query, params)
         self.conn.commit()
     # _____________________________
@@ -456,13 +439,6 @@ class DBAdmin:
         self.cursor.execute(query, params)
         self.conn.commit()
     # _____________________________
-
-    def resetdb(self):
-        self.revoke_connect_from_db()
-        self.dropdb()
-        self.createdb()
-        self.grant_connect_to_db()
-    # ___________________________
 
     def revoke_connect_from_db(self, dbname=None, dbuser=None):
         if dbname is None:
