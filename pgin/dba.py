@@ -386,10 +386,9 @@ class DBAdmin:
 
     def set_search_path(self, schema):
         query = """
-            ALTER DATABASE %s
             SET search_path=%s,public
         """
-        params = (AsIs(schema), AsIs(schema))
+        params = (AsIs(schema),)
         self.cursor.execute(query, params)
         self.conn.commit()
     # _____________________________
