@@ -25,7 +25,7 @@ logger = applogging.set_logger(logger_name=conf['PROJECT'], log_to_console=True)
 
 from pgin.lib.helpers import create_directory  # noqa
 from pgin.dba import DBAdmin  # noqa
-MSG_LENGTH = 40
+MSG_LENGTH = 60
 # _____________________________________________
 
 
