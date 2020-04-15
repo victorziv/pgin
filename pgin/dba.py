@@ -124,14 +124,6 @@ class DBAdmin:
             params = {'dbname': AsIs(newdb), 'user': AsIs(newdb_owner)}
             admin_cursor.execute(query, params)
 
-            # Set search_path
-#             query = """
-#                 ALTER DATABASE %(dbname)s
-#                 SET search_path TO %(dbname)s,public;
-#             """
-#             params = {'dbname': AsIs(newdb), 'user': AsIs(newdb)}
-#             admin_cursor.execute(query, params)
-
         except psycopg2.ProgrammingError as pe:
             if 'already exists' in repr(pe):
                 pass
@@ -233,7 +225,7 @@ class DBAdmin:
 
         try:
             admin_db_uri = Config.db_connection_uri_admin(dbuser=self.dbuser)
-            self.logger.info("Admin DB URI: %r", admin_db_uri)
+            self.logger.debug("Admin DB URI: %r", admin_db_uri)
             admin_conn = self.connectdb(admin_db_uri)
             admin_cursor = admin_conn.cursor()
             admin_conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
