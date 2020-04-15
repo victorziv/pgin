@@ -1,0 +1,38 @@
+#!/bin/bash
+APP=hwinfo
+curdir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+scriptdir=$(dirname ${curdir})
+ROOTDIR=$(dirname ${scriptdir})
+VERSION_FILE=${ROOTDIR}/${APP}/VERSION
+# ============================
+
+bump_patch_version() {
+
+    version=$(cat ${VERSION_FILE} | tr -d '\n')
+    IFS='\.' read -r major minor patch <<< "${version}"
+    
+    new_patch=$(($patch+1))
+    new_version="${major}.${minor}.${new_patch}"
+    echo ${new_version} > ${VERSION_FILE}
+
+    cd ${ROOTDIR}
+    git checkout master
+    git add ${APP}/VERSION
+    git commit -m "Bumping version: ${version} -> ${new_version}"
+    git push origin master
+}
+#_________________________________
+
+main() {
+    branch_name=$(git branch | grep "*" | sed "s/\* //")
+    if [[ ${branch_name} != "master" ]];then
+        # ignore all branches except master
+        exit 0
+    fi
+    reflog_message=$(git reflog -1)
+    merged_branch_name=$(echo $reflog_message | cut -d" " -f 4 | sed "s/://")
+    bump_patch_version
+}
+#_________________________________
+
+main "$@"
