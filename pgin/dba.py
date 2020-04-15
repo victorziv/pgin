@@ -376,12 +376,12 @@ class DBAdmin:
         self.conn.commit()
     # ___________________________
 
-    def init_app(self, app):
-        self.conn = self.connectdb(app.config['DB_CONN_URI'])
-        self.cursor = self.conn.cursor(cursor_factory=DictCursor)
-        self.show_search_path()
-        app.db = self
-        return app
+#     def init_app(self, app):
+#         self.conn = self.connectdb(app.config['DB_CONN_URI'])
+#         self.cursor = self.conn.cursor(cursor_factory=DictCursor)
+#         self.show_search_path()
+#         app.db = self
+#         return app
     # _____________________________
 
     def set_search_path(self, schema):
