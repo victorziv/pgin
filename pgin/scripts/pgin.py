@@ -401,7 +401,7 @@ def add(migration, change, msg):
         if not script_exists(migration, direction, change):
             create_script(migration, direction, change)
 
-    click.echo(click.style('Change `{}` has been added'.format(change), fg='green'))
+    click.echo("Change '{}' has been added".format(change))
 # _____________________________________________
 
 
