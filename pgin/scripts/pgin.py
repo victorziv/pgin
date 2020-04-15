@@ -106,7 +106,7 @@ def create_script(migration, direction, name):
     with open(script_path, 'w') as fw:
         fw.write("%s\n" % code)
 
-    logger.info("Created script: %r", os.path.join(direction, script_file))
+    click.echo("Created script: {}".format(os.path.join(direction, script_file)))
 # _____________________________________________
 
 

@@ -1,7 +1,6 @@
 import logging
 import datetime
 import psycopg2
-from psycopg2.extras import DictCursor
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT, AsIs
 from config import Config
 # ==============================================================
@@ -45,38 +44,6 @@ class DBAdmin:
 
         self.cursor.execute(query, params)
         self.conn.commit()
-    # _____________________________
-
-#     def apply_tag(self, changeid, tag, msg):
-#         query = """
-#             INSERT INTO %s.tags
-#             (changeid, tag, msg, tagged)
-#             VALUES
-#             (%s, %s, %s, %s)
-#             ON CONFLICT(changeid)
-#             DO UPDATE
-#             SET
-#                 tag = %s,
-#                 msg = %s,
-#                 tagged = %s
-#             WHERE %s.tags.changeid = %s
-#         """
-#         params = [
-#             AsIs(self.meta_schema),
-#             changeid,
-#             tag,
-#             msg,
-#             datetime.datetime.utcnow(),
-
-#             tag,
-#             msg,
-#             datetime.datetime.utcnow(),
-#             AsIs(self.meta_schema),
-#             changeid,
-#         ]
-
-#         self.cursor.execute(query, params)
-#         self.conn.commit()
     # _____________________________
 
     def apply_tag(self, changeid, tag, msg):
