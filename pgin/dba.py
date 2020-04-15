@@ -110,11 +110,11 @@ class DBAdmin:
         if newdb_owner is None:
             newdb_owner = self.dbuser
 
-        self.logger.info("Creating DB %s with owner %s", newdb, newdb_owner)
+        self.logger.debug("Creating DB %s with owner %s", newdb, newdb_owner)
 
         try:
             admin_db_uri = Config.db_connection_uri_admin(dbuser=newdb_owner)
-            self.logger.info("Admin DB URI: %r", admin_db_uri)
+            self.logger.debug("Admin DB URI: %r", admin_db_uri)
             admin_conn = self.connectdb(admin_db_uri)
             admin_cursor = admin_conn.cursor()
             admin_conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
@@ -124,21 +124,13 @@ class DBAdmin:
             params = {'dbname': AsIs(newdb), 'user': AsIs(newdb_owner)}
             admin_cursor.execute(query, params)
 
-            # Reset search_path
-#             query = """
-#                 ALTER ROLE %s
-#                 RESET search_path;
-#             """
-#             params = [AsIs(self.dbuser)]
-#             admin_cursor.execute(query, params)
-
             # Set search_path
-            query = """
-                ALTER DATABASE %(dbname)s
-                SET search_path TO %(dbname)s,public;
-            """
-            params = {'dbname': AsIs(newdb), 'user': AsIs(newdb)}
-            admin_cursor.execute(query, params)
+#             query = """
+#                 ALTER DATABASE %(dbname)s
+#                 SET search_path TO %(dbname)s,public;
+#             """
+#             params = {'dbname': AsIs(newdb), 'user': AsIs(newdb)}
+#             admin_cursor.execute(query, params)
 
         except psycopg2.ProgrammingError as pe:
             if 'already exists' in repr(pe):

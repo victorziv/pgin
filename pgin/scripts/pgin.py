@@ -480,17 +480,17 @@ def init(migration, force=False, newdb=False):
 
     logger.debug("Migration plan path: %r", migration.plan)
     if os.path.exists(migration.plan) and not force:
-        logger.info("Project %s migration facility already initiated", migration.project)
+        click.echo("Project '{}' migration facility already initiated".format(migration.project))
         sys.exit(0)
 
-    logger.info('Initiating project %s migrations', migration.project)
-    logger.info('Migration container path: %s', migration.home)
+    click.echo("Initiating project '{}' migrations".format(migration.project))
+    click.echo('Migration container path: {}'.format(migration.home))
     create_directory(migration.home)
     turn_to_python_package(migration.home)
 
     for d in ['deploy', 'revert']:
         create_directory(os.path.join(migration.home, d))
-        logger.info("Created %s/", d)
+        click.echo("Created {}/".format(d))
         turn_to_python_package(os.path.join(migration.home, d))
 
     try:
@@ -498,8 +498,14 @@ def init(migration, force=False, newdb=False):
         dba.revoke_connect_from_db()
 
         if newdb:
-            dba.dropdb()
+            sure = input("Sure to drop existing DB {}? (Yes/No) ".format(migration.project).lower())
+            if sure in ['y', 'yes']:
+                click.echo("Dropping DB {}".format(migration.project))
+                dba.dropdb()
+            else:
+                click.echo("DB {} will not be dropped".format(migration.project))
 
+        click.echo("Creating DB {} if not already exists".format(migration.project))
         dba.createdb()
         dba.grant_connect_to_db()
         dba = connect_dba(migration)
