@@ -269,6 +269,14 @@ def plan_record_exists(dba, migration, change):
 # _____________________________________________
 
 
+def populate_plan_table(migration, dba):
+    changes = plan_file_entries(migration)
+    for change in changes:
+        changeid = get_changeid(change['change'])
+        dba.apply_planned(changeid, change['change'], change['msg'])
+# _____________________________________________
+
+
 def set_tag(migration, tag, msg, change):
     lines = []
     with jsonlines.open(migration.plan) as reader:
@@ -473,21 +481,20 @@ def deploy(migration, upto_change_name=None, upto_tag_name=None):
 
 
 @cli.command()
-@click.option('-f', '--force', is_flag=True, required=False, help="Forcibly re-initiate DB and migration installment")
 @click.option('--newdb', is_flag=True, required=False, help="If set to TRUE drops and re-creates existent DB")
 @pass_migration
-def init(migration, force=False, newdb=False):
+def init(migration, newdb=False):
     """
         Initiates the project DB migrations.
     """
 
-    logger.debug("Migration plan path: %r", migration.plan)
-    if os.path.exists(migration.plan) and not force:
-        click.echo("Project '{}' migration facility already initiated".format(migration.project))
-        sys.exit(0)
-
     click.echo("Initiating project '{}' migrations".format(migration.project))
     click.echo('Migration container path: {}'.format(migration.home))
+
+    if not os.path.exists(migration.plan):
+        logger.debug("Creating migration plan file: %r", migration.plan)
+        create_plan(migration.plan)
+
     create_directory(migration.home)
     turn_to_python_package(migration.home)
 
@@ -513,14 +520,9 @@ def init(migration, force=False, newdb=False):
         dba.grant_connect_to_db()
         dba = connect_dba(migration)
         create_pgin_metaschema(dba)
+        populate_plan_table(migration, dba)
     finally:
         disconnect_dba(dba)
-
-    if os.path.exists(migration.plan) and not force:
-        click.echo("Migration plan {} already exists".format(migration.plan))
-        sys.exit(0)
-
-    create_plan(migration.plan)
 # _____________________________________________
 
 
