@@ -660,11 +660,15 @@ def status(migration):
             click.echo("# Applied: {}".format(dt))
             click.echo('')
 
-        lines, _ = change_entry_or_last(migration, None)
+        lines = plan_file_entries(migration)
         undeployed = []
         for l in lines:
             if not change_deployed(migration, l['name']):
                 undeployed.append(l)
+
+        if len(undeployed) == len(lines):
+            click.echo("No changes deployed")
+            sys.exit(0)
 
         if len(undeployed):
             tablist = [(c['name'], c['msg'], c.get('tag'), c.get('tagmsg')) for c in undeployed]
