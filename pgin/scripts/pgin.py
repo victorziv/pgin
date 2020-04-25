@@ -339,10 +339,10 @@ def validate_project_user(ctx, param, value):
 # _____________________________________________
 
 
-def update_plan(migration, change, msg):
+def update_plan(migration, name, msg):
     with jsonlines.open(migration.plan, mode='a') as writer:
         writer.write({
-            'change': change,
+            'name': name,
             'msg': msg,
         })
 # _____________________________________________
