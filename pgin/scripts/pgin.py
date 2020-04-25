@@ -145,7 +145,7 @@ def disconnect_dba(dba):
 # _____________________________________________
 
 
-def change_entry_or_last(migration, change):
+def change_entry_or_last(migration, name):
     '''
     If passed change is None, the last line index is returned
     '''
@@ -153,7 +153,7 @@ def change_entry_or_last(migration, change):
     change_ind = None
     with jsonlines.open(migration.plan) as reader:
         for ind, l in enumerate(reader):
-            if l['change'] == change:
+            if l['name'] == name:
                 change_ind = ind
             lines.append(l)
 
@@ -226,8 +226,8 @@ def not_remove_if_false(ctx, param, value):
 # _____________________________________________
 
 
-def remove_from_plan(migration, change):
-    lines, change_ind = change_entry_or_last(migration, change)
+def remove_from_plan(migration, name):
+    lines, change_ind = change_entry_or_last(migration, name)
     lines.pop(change_ind)
     write_plan(migration, lines)
 # _____________________________________________
@@ -272,8 +272,8 @@ def plan_record_exists(dba, migration, change):
 def populate_plan_table(migration, dba):
     changes = plan_file_entries(migration)
     for change in changes:
-        changeid = get_changeid(change['change'])
-        dba.apply_planned(changeid, change['change'], change['msg'])
+        changeid = get_changeid(change['name'])
+        dba.apply_planned(changeid, change['name'], change['msg'])
 # _____________________________________________
 
 
@@ -282,7 +282,7 @@ def set_tag(migration, tag, msg, change):
     with jsonlines.open(migration.plan) as reader:
         tag_set = False
         for l in reader:
-            if l['change'] == change:
+            if l['name'] == change:
                 l['tag'] = tag
                 l['tagmsg'] = msg
                 tag_set = True
@@ -290,7 +290,7 @@ def set_tag(migration, tag, msg, change):
 
         if not tag_set:
             last = lines[-1]
-            change = last['change']
+            change = last['name']
             last['tag'] = tag
             last['tagmsg'] = msg
 
@@ -445,15 +445,15 @@ def deploy(migration, upto_change_name=None, upto_tag_name=None):
         lines, change_ind = change_entry_or_last(migration, upto_change_name)
         upto_change = lines[change_ind]
 
-        if not plan_record_exists(dba, migration, upto_change['change']):
+        if not plan_record_exists(dba, migration, upto_change['name']):
             click.echo(click.style(
-                "Change `{}` is not found in migration plan".format(upto_change['change']), fg='yellow'))
+                "Change `{}` is not found in migration plan".format(upto_change['name']), fg='yellow'))
             sys.exit(1)
 
         click.echo(msg)
 
         for l in lines:
-            change = l['change']
+            change = l['name']
             deploy, changeid = get_change_deploy(migration, dba, change)
 
             if change_deployed(migration, change):
@@ -466,7 +466,7 @@ def deploy(migration, upto_change_name=None, upto_tag_name=None):
                 dba.apply_tag(changeid, l['tag'], l['tagmsg'])
 
             click.echo(click.style('ok', fg='green'))
-            if change == upto_change['change']:
+            if change == upto_change['name']:
                 break
 
     except psycopg2.ProgrammingError as pe:
@@ -576,7 +576,7 @@ def figure_upto_change(dba, migration, upto):
     changes = plan_file_entries(migration)
     if pat1.match(upto):
         # last change
-        name = changes[-1]['change']
+        name = changes[-1]['name']
         msg = "Reverting deployed changes from '{}'. Last change to revert: '{}'".format(
             migration.project, name)
         return name, msg
@@ -586,7 +586,7 @@ def figure_upto_change(dba, migration, upto):
         changes_back = match2.group(1)
         # last change
         try:
-            name = changes[-(int(changes_back) + 1)]['change']
+            name = changes[-(int(changes_back) + 1)]['name']
             msg = "Reverting deployed changes from '{}'. Last change to revert: '{}'".format(
                 migration.project, name)
         except IndexError:
@@ -663,11 +663,11 @@ def status(migration):
         lines, _ = change_entry_or_last(migration, None)
         undeployed = []
         for l in lines:
-            if not change_deployed(migration, l['change']):
+            if not change_deployed(migration, l['name']):
                 undeployed.append(l)
 
         if len(undeployed):
-            tablist = [(c['change'], c['msg'], c.get('tag'), c.get('tagmsg')) for c in undeployed]
+            tablist = [(c['name'], c['msg'], c.get('tag'), c.get('tagmsg')) for c in undeployed]
             click.echo("Undeployed changes:")
             click.echo("")
             click.echo(tabulate(tablist, headers=['Change', 'Message', 'Tag', 'Tag Message'], floatfmt=".1f"))
@@ -706,7 +706,7 @@ def tag_add(migration, tag, msg, change=None):
     if 'tag' in change_line:
         click.echo(
             click.style(
-                'Tag {} already applied to change {}'.format(change_line['tag'], change_line['change']),
+                'Tag {} already applied to change {}'.format(change_line['tag'], change_line['name']),
                 fg='yellow'
             )
         )
@@ -720,11 +720,11 @@ def tag_add(migration, tag, msg, change=None):
 
     write_plan(migration, lines)
 
-    changeid = get_changeid(change_line['change'])
+    changeid = get_changeid(change_line['name'])
     dba = connect_dba(migration)
     dba.apply_tag(changeid, tag, msg)
 
-    click.echo(click.style("Tag '{}' was applied to change '{}'".format(tag, change_line['change']), fg='green'))
+    click.echo(click.style("Tag '{}' was applied to change '{}'".format(tag, change_line['name']), fg='green'))
 # _____________________________________________
 
 
@@ -738,7 +738,7 @@ def tag_list(migration):
 
     dba = connect_dba(migration)
     tags = dba.fetch_tags()
-    tag_list = [(t['change'], t['tag'], t['tagmsg']) for t in tags]
+    tag_list = [(t['name'], t['tag'], t['tagmsg']) for t in tags]
     click.echo(tabulate(tag_list, headers=['Change', 'Tag', 'Message'], floatfmt=".1f"))
 # _____________________________________________
 
