@@ -13,9 +13,9 @@ from tabulate import tabulate
 from config import Config, Configurator
 # =================================================
 
-runtype = os.getenv('%s_CONFIG' % Config.PROJECT.upper())
+runtype = os.getenv('CONFIG_ENV')
 if runtype is None:
-    print("ERROR: $%s_CONFIG env. variable is not set" % Config.PROJECT.upper())
+    print("ERROR: $CONFIG_ENV environment variable is not set")
     sys.exit(1)
 
 conf = Configurator.configure(config_type=runtype)
