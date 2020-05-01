@@ -157,17 +157,21 @@ class DBAdmin:
         self.conn.commit()
     # _____________________________
 
-    def connectdb(self, dburi):
-        try:
-            conn = psycopg2.connect(dburi)
-            return conn
+#     def connectdb(self, dburi):
+#         try:
+#             conn = psycopg2.connect(dburi)
+#             return conn
 
-        except psycopg2.OperationalError as e:
-            if 'does not exist' in str(e):
-                self.logger.exception("OOPS: {}".format(e))
-                return
-            else:
-                raise
+#         except psycopg2.OperationalError as e:
+#             if 'does not exist' in str(e):
+#                 self.logger.error("OOPS: {}".format(e))
+#                 return
+#             else:
+#                 raise
+    # ___________________________
+
+    def connectdb(self, dburi):
+        return psycopg2.connect(dburi)
     # ___________________________
 
     def disconnect_all_from_db(self, cursor, dbname):
@@ -408,6 +412,8 @@ class DBAdmin:
     # _____________________________
 
     def revoke_connect_from_db(self, dbname=None, dbuser=None):
+        conn = None
+        cursor = None
         if dbname is None:
             dbname = self.dbname
 
@@ -429,11 +435,12 @@ class DBAdmin:
             params = (dbname, )
             cursor.execute(query, params)
             conn.commit()
-        except psycopg2.ProgrammingError as e:
+        except psycopg2.OperationalError as e:
             if 'does not exist' in str(e):
                 pass
             else:
-                raise
+                self.logger.exception("Operation error exception")
+
         except Exception:
             self.logger.exception("Revoke connection from db exception")
         finally:
