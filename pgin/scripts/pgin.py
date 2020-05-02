@@ -586,7 +586,7 @@ def figure_revert_upto_change(dba, migration, upto):
     if match2:
         changes_back = match2.group(1)
 
-        # last change
+        # change with offset <changes_back>
         try:
             change = dba.fetch_deployed_changes(offset=int(changes_back), limit=1)[0]
             name = change['name']
