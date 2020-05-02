@@ -209,15 +209,20 @@ class DBAdmin:
             admin_conn.close()
     # ___________________________
 
-    def fetch_deployed_changes(self):
+    def fetch_deployed_changes(self, offset=0, limit=None):
         query = """
             SELECT
                 changeid,
                 name
             FROM %s.changes
             ORDER BY applied DESC
+            OFFSET %s
         """
-        params = [AsIs(self.meta_schema)]
+        params = [AsIs(self.meta_schema), offset]
+
+        if limit:
+            query += 'LIMIT %s'
+            params.append(limit)
 
         self.cursor.execute(query, params)
         fetch = self.cursor.fetchall()

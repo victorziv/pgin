@@ -557,7 +557,7 @@ def remove(migration, change):
 # _____________________________________________
 
 
-def figure_upto_change(dba, migration, upto):
+def figure_revert_upto_change(dba, migration, upto):
     pat1 = re.compile(r'^HEAD$')
     pat2 = re.compile(r'^HEAD~(\d+)$')
 
@@ -573,10 +573,11 @@ def figure_upto_change(dba, migration, upto):
         return name, msg
 
     # Figure out HEAD[~\d+] pattern passed
-    changes = plan_file_entries(migration)
+#     changes = plan_file_entries(migration)
     if pat1.match(upto):
         # last change
-        name = changes[-1]['name']
+        change = dba.fetch_deployed_changes(limit=1)
+        name = change['name']
         msg = "Reverting deployed changes from '{}'. Last change to revert: '{}'".format(
             migration.project, name)
         return name, msg
@@ -584,9 +585,11 @@ def figure_upto_change(dba, migration, upto):
     match2 = pat2.match(upto)
     if match2:
         changes_back = match2.group(1)
+
         # last change
         try:
-            name = changes[-(int(changes_back) + 1)]['name']
+            change = dba.fetch_deployed_changes(offset=int(changes_back), limit=1)
+            name = change['name']
             msg = "Reverting deployed changes from '{}'. Last change to revert: '{}'".format(
                 migration.project, name)
         except IndexError:
@@ -616,7 +619,7 @@ def revert(migration, upto=None):
     try:
 
         dba = connect_dba(migration)
-        to, msg = figure_upto_change(dba, migration, upto)
+        to, msg = figure_revert_upto_change(dba, migration, upto)
 
         click.echo(msg)
 
