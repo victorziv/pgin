@@ -576,7 +576,7 @@ def figure_revert_upto_change(dba, migration, upto):
 #     changes = plan_file_entries(migration)
     if pat1.match(upto):
         # last change
-        change = dba.fetch_deployed_changes(limit=1)
+        change = dba.fetch_deployed_changes(limit=1)[0]
         name = change['name']
         msg = "Reverting deployed changes from '{}'. Last change to revert: '{}'".format(
             migration.project, name)
@@ -588,7 +588,7 @@ def figure_revert_upto_change(dba, migration, upto):
 
         # last change
         try:
-            change = dba.fetch_deployed_changes(offset=int(changes_back), limit=1)
+            change = dba.fetch_deployed_changes(offset=int(changes_back), limit=1)[0]
             name = change['name']
             msg = "Reverting deployed changes from '{}'. Last change to revert: '{}'".format(
                 migration.project, name)
