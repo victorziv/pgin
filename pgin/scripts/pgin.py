@@ -414,11 +414,11 @@ def add(migration, change, msg):
 
 
 @cli.command()
-@click.option('-c', '--change', 'upto_change_name', cls=MutuallyExclusiveOption, mutually_exclusive=['upto_tag_name'])
+@click.option('--to', 'to_change_name', cls=MutuallyExclusiveOption, mutually_exclusive=['upto_tag_name'])
 @click.option(
-    '-t', '--tag', 'upto_tag_name', cls=MutuallyExclusiveOption, mutually_exclusive=['upto_change_name'])
+    '-t', '--tag', 'upto_tag_name', cls=MutuallyExclusiveOption, mutually_exclusive=['to_change_name'])
 @pass_migration
-def deploy(migration, upto_change_name=None, upto_tag_name=None):
+def deploy(migration, to_change_name=None, upto_tag_name=None):
     """
     Deploys pending changes
     """
@@ -426,23 +426,23 @@ def deploy(migration, upto_change_name=None, upto_tag_name=None):
     try:
         dba = connect_dba(migration)
 
-        if upto_change_name is None and upto_tag_name is None:
+        if to_change_name is None and upto_tag_name is None:
             msg = "Deploying all pending changes to '{}'".format(migration.project)
 
-        if upto_change_name is not None:
+        if to_change_name is not None:
             msg = "Deploying pending changes to '{}'. Last change to deploy: {}".format(
-                migration.project, upto_change_name)
+                migration.project, to_change_name)
 
         if upto_tag_name is not None:
-            upto_change_name = dba.fetch_change_by_tag(upto_tag_name)
+            to_change_name = dba.fetch_change_by_tag(upto_tag_name)
 
-            if upto_change_name is None:
+            if to_change_name is None:
                 click.echo(click.style("Tag '{}' is not found".format(upto_tag_name, fg='yellow')))
                 sys.exit(1)
 
             msg = "Deploying pending changes to '{}'. Last tag to deploy: '{}'".format(migration.project, upto_tag_name)
 
-        lines, change_ind = change_entry_or_last(migration, upto_change_name)
+        lines, change_ind = change_entry_or_last(migration, to_change_name)
         upto_change = lines[change_ind]
 
         if not plan_record_exists(dba, migration, upto_change['name']):
