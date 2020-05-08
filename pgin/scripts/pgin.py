@@ -270,10 +270,14 @@ def plan_record_exists(dba, migration, change):
 
 
 def populate_plan_table(migration, dba):
+    click.echo("Sync plan file into DB metaschema plan table")
     changes = plan_file_entries(migration)
     for change in changes:
-        changeid = get_changeid(change['name'])
-        dba.apply_planned(changeid, change['name'], change['msg'])
+        change_name = change['name']
+        click.echo(message="+ {} {} ".format(change_name, '.' * (MSG_LENGTH - len(change_name))), nl=False)
+        changeid = get_changeid(change_name)
+        dba.apply_planned(changeid, change_name, change['msg'])
+        click.echo(click.style('ok', fg='green'))
 # _____________________________________________
 
 
@@ -634,6 +638,7 @@ def revert(migration, to_change_name=None, to_tag_name=None):
 
         lines, change_ind = change_entry_or_last(migration, to_change_name)
         upto_change = lines[change_ind]
+        print('XXX upto_change'.format(upto_change))
 
         if not plan_record_exists(dba, migration, upto_change['name']):
             click.echo(click.style(
@@ -643,6 +648,7 @@ def revert(migration, to_change_name=None, to_tag_name=None):
         click.echo(msg)
 
         changes = dba.fetch_deployed_changes()
+        print('XXX changes: {}'.format(changes))
 
         for change_d in changes:
             name = change_d['name']
@@ -652,7 +658,7 @@ def revert(migration, to_change_name=None, to_tag_name=None):
             revert()
             dba.remove_change(changeid)
             click.echo(click.style('ok', fg='green'))
-            if name == upto_change['name']:
+            if name == to_change_name:
                 break
 
     except Exception:
@@ -699,6 +705,22 @@ def status(migration):
             click.echo(tabulate(tablist, headers=['Change', 'Message', 'Tag', 'Tag Message'], floatfmt=".1f"))
         else:
             click.echo("Nothing to deploy (up-to-date)")
+    finally:
+        disconnect_dba(dba)
+# _____________________________________________
+
+
+@cli.command()
+@pass_migration
+def sync(migration):
+    """
+    Sync plan file with DB metaschema plan table
+    """
+
+    try:
+        dba = connect_dba(migration)
+        create_pgin_metaschema(dba)
+        populate_plan_table(migration, dba)
     finally:
         disconnect_dba(dba)
 # _____________________________________________
