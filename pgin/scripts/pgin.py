@@ -13,9 +13,9 @@ from tabulate import tabulate
 from config import Config, Configurator
 # =================================================
 
-runtype = os.getenv('%s_CONFIG' % Config.PROJECT.upper())
+runtype = os.getenv('CONFIG_ENV')
 if runtype is None:
-    print("ERROR: $%s_CONFIG env. variable is not set" % Config.PROJECT.upper())
+    print("ERROR: $CONFIG_ENV environment variable is not set")
     sys.exit(1)
 
 conf = Configurator.configure(config_type=runtype)
@@ -560,7 +560,7 @@ def remove(migration, change):
 # _____________________________________________
 
 
-def figure_upto_change(dba, migration, upto):
+def figure_revert_upto_change(dba, migration, upto):
     pat1 = re.compile(r'^HEAD$')
     pat2 = re.compile(r'^HEAD~(\d+)$')
 
@@ -576,10 +576,11 @@ def figure_upto_change(dba, migration, upto):
         return name, msg
 
     # Figure out HEAD[~\d+] pattern passed
-    changes = plan_file_entries(migration)
+#     changes = plan_file_entries(migration)
     if pat1.match(upto):
         # last change
-        name = changes[-1]['name']
+        change = dba.fetch_deployed_changes(limit=1)[0]
+        name = change['name']
         msg = "Reverting deployed changes from '{}'. Last change to revert: '{}'".format(
             migration.project, name)
         return name, msg
@@ -587,9 +588,11 @@ def figure_upto_change(dba, migration, upto):
     match2 = pat2.match(upto)
     if match2:
         changes_back = match2.group(1)
-        # last change
+
+        # change with offset <changes_back>
         try:
-            name = changes[-(int(changes_back) + 1)]['name']
+            change = dba.fetch_deployed_changes(offset=int(changes_back), limit=1)[0]
+            name = change['name']
             msg = "Reverting deployed changes from '{}'. Last change to revert: '{}'".format(
                 migration.project, name)
         except IndexError:
@@ -638,7 +641,6 @@ def revert(migration, to_change_name=None, to_tag_name=None):
 
         lines, change_ind = change_entry_or_last(migration, to_change_name)
         upto_change = lines[change_ind]
-        print('XXX upto_change'.format(upto_change))
 
         if not plan_record_exists(dba, migration, upto_change['name']):
             click.echo(click.style(
@@ -648,7 +650,6 @@ def revert(migration, to_change_name=None, to_tag_name=None):
         click.echo(msg)
 
         changes = dba.fetch_deployed_changes()
-        print('XXX changes: {}'.format(changes))
 
         for change_d in changes:
             name = change_d['name']
