@@ -608,15 +608,15 @@ def figure_upto_change(dba, migration, upto):
 @cli.command()
 @click.option('-y', '--yes', is_flag=True, callback=not_revert_if_false, expose_value=False, prompt='Revert?')
 @pass_migration
-@click.option('--upto')
-def revert(migration, upto=None):
+@click.option('--to')
+def revert(migration, to=None):
     """
     Revert deployed
     """
     try:
 
         dba = connect_dba(migration)
-        to, msg = figure_upto_change(dba, migration, upto)
+        to, msg = figure_upto_change(dba, migration, to)
 
         click.echo(msg)
 
