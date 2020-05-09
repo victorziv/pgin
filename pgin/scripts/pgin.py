@@ -185,7 +185,8 @@ def get_change_deploy(migration, dba, change):
         project=migration.project,
         project_user=migration.project_user,
         conf=migration.conf,
-        conn=dba.conn
+        conn=dba.conn,
+        logger=migration.logger
     )
 
     return deploy, changeid
@@ -205,7 +206,8 @@ def get_change_revert(migration, dba, change):
         project=migration.project,
         project_user=migration.project_user,
         conf=migration.conf,
-        conn=dba.conn
+        conn=dba.conn,
+        logger=migration.logger
     )
 
     return revert
