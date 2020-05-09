@@ -576,7 +576,6 @@ def figure_revert_upto_change(dba, migration, upto):
         return name, msg
 
     # Figure out HEAD[~\d+] pattern passed
-#     changes = plan_file_entries(migration)
     if pat1.match(upto):
         # last change
         change = dba.fetch_deployed_changes(limit=1)[0]
@@ -613,39 +612,16 @@ def figure_revert_upto_change(dba, migration, upto):
 
 @cli.command()
 @click.option('-y', '--yes', is_flag=True, callback=not_revert_if_false, expose_value=False, prompt='Revert?')
-@click.option('--to-change', 'to_change_name', cls=MutuallyExclusiveOption, mutually_exclusive=['to_tag_name'])
-@click.option('--to-tag', 'to_tag_name', cls=MutuallyExclusiveOption, mutually_exclusive=['to_change_name'])
 @pass_migration
-def revert(migration, to_change_name=None, to_tag_name=None):
+@click.option('--to')
+def revert(migration, to=None):
     """
     Revert deployed
     """
     try:
 
         dba = connect_dba(migration)
-        if to_change_name is None and to_tag_name is None:
-            msg = "Reverting all changes to '{}'".format(migration.project)
-
-        if to_change_name is not None:
-            msg = "Reverting changes to '{}'. Last change to revert: {}".format(
-                migration.project, to_change_name)
-
-        if to_tag_name is not None:
-            to_change_name = dba.fetch_change_by_tag(to_tag_name)
-
-            if to_change_name is None:
-                click.echo(click.style("Tag '{}' is not found".format(to_tag_name, fg='yellow')))
-                sys.exit(1)
-
-            msg = "Reverting changes to '{}'. Last tag to deploy: '{}'".format(migration.project, to_tag_name)
-
-        lines, change_ind = change_entry_or_last(migration, to_change_name)
-        upto_change = lines[change_ind]
-
-        if not plan_record_exists(dba, migration, upto_change['name']):
-            click.echo(click.style(
-                "Change `{}` is not found in migration plan".format(upto_change['name']), fg='yellow'))
-            sys.exit(1)
+        to, msg = figure_revert_upto_change(dba, migration, to)
 
         click.echo(msg)
 
@@ -659,7 +635,7 @@ def revert(migration, to_change_name=None, to_tag_name=None):
             revert()
             dba.remove_change(changeid)
             click.echo(click.style('ok', fg='green'))
-            if name == to_change_name:
+            if name == to:
                 break
 
     except Exception:
