@@ -418,44 +418,22 @@ def add(migration, change, msg):
 
 
 @cli.command()
-@click.option('--to-change', 'to_change_name', cls=MutuallyExclusiveOption, mutually_exclusive=['to_tag_name'])
-@click.option('--to-tag', 'to_tag_name', cls=MutuallyExclusiveOption, mutually_exclusive=['to_change_name'])
+@click.option('--to')
 @pass_migration
-def deploy(migration, to_change_name=None, to_tag_name=None):
+def deploy(migration, to=None):
     """
     Deploys pending changes
     """
 
     try:
         dba = connect_dba(migration)
-
-        if to_change_name is None and to_tag_name is None:
-            msg = "Deploying all pending changes to '{}'".format(migration.project)
-
-        if to_change_name is not None:
-            msg = "Deploying pending changes to '{}'. Last change to deploy: {}".format(
-                migration.project, to_change_name)
-
-        if to_tag_name is not None:
-            to_change_name = dba.fetch_change_by_tag(to_tag_name)
-
-            if to_change_name is None:
-                click.echo(click.style("Tag '{}' is not found".format(to_tag_name, fg='yellow')))
-                sys.exit(1)
-
-            msg = "Deploying pending changes to '{}'. Last tag to deploy: '{}'".format(migration.project, to_tag_name)
-
-        lines, change_ind = change_entry_or_last(migration, to_change_name)
-        upto_change = lines[change_ind]
-
-        if not plan_record_exists(dba, migration, upto_change['name']):
-            click.echo(click.style(
-                "Change `{}` is not found in migration plan".format(upto_change['name']), fg='yellow'))
-            sys.exit(1)
+        to, msg = figure_deploy_to_change(dba, migration, to)
 
         click.echo(msg)
 
-        for l in lines:
+        changes = plan_file_entries(migration)
+
+        for l in changes:
             change = l['name']
             deploy, changeid = get_change_deploy(migration, dba, change)
 
@@ -469,7 +447,7 @@ def deploy(migration, to_change_name=None, to_tag_name=None):
                 dba.apply_tag(changeid, l['tag'], l['tagmsg'])
 
             click.echo(click.style('ok', fg='green'))
-            if change == upto_change['name']:
+            if change == to:
                 break
 
     except psycopg2.ProgrammingError as pe:
@@ -480,6 +458,72 @@ def deploy(migration, to_change_name=None, to_tag_name=None):
         logger.exception('Exception in deploy')
     finally:
         disconnect_dba(dba)
+# _____________________________________________
+
+
+# @cli.command()
+# @click.option('--to-change', 'to_change_name', cls=MutuallyExclusiveOption, mutually_exclusive=['to_tag_name'])
+# @click.option('--to-tag', 'to_tag_name', cls=MutuallyExclusiveOption, mutually_exclusive=['to_change_name'])
+# @pass_migration
+# def deploy(migration, to_change_name=None, to_tag_name=None):
+#     """
+#     Deploys pending changes
+#     """
+
+#     try:
+#         dba = connect_dba(migration)
+
+#         if to_change_name is None and to_tag_name is None:
+#             msg = "Deploying all pending changes to '{}'".format(migration.project)
+
+#         if to_change_name is not None:
+#             msg = "Deploying pending changes to '{}'. Last change to deploy: {}".format(
+#                 migration.project, to_change_name)
+
+#         if to_tag_name is not None:
+#             to_change_name = dba.fetch_change_by_tag(to_tag_name)
+
+#             if to_change_name is None:
+#                 click.echo(click.style("Tag '{}' is not found".format(to_tag_name, fg='yellow')))
+#                 sys.exit(1)
+
+#             msg = "Deploying pending changes to '{}'. Last tag to deploy: '{}'".format(migration.project, to_tag_name)
+
+#         lines, change_ind = change_entry_or_last(migration, to_change_name)
+#         upto_change = lines[change_ind]
+
+#         if not plan_record_exists(dba, migration, upto_change['name']):
+#             click.echo(click.style(
+#                 "Change `{}` is not found in migration plan".format(upto_change['name']), fg='yellow'))
+#             sys.exit(1)
+
+#         click.echo(msg)
+
+#         for l in lines:
+#             change = l['name']
+#             deploy, changeid = get_change_deploy(migration, dba, change)
+
+#             if change_deployed(migration, change):
+#                 continue
+
+#             click.echo(message="+ {} {} ".format(change, '.' * (MSG_LENGTH - len(change))), nl=False)
+#             deploy()
+#             dba.apply_change(changeid, change)
+#             if 'tag' in l:
+#                 dba.apply_tag(changeid, l['tag'], l['tagmsg'])
+
+#             click.echo(click.style('ok', fg='green'))
+#             if change == upto_change['name']:
+#                 break
+
+#     except psycopg2.ProgrammingError as pe:
+#         click.echo(click.style('fail', fg='red'))
+#         click.echo("!!! Error in deploy: {}".format(pe))
+#         logger.exception('Exception in deploy')
+#     except Exception:
+#         logger.exception('Exception in deploy')
+#     finally:
+#         disconnect_dba(dba)
 # _____________________________________________
 
 
@@ -560,6 +604,30 @@ def remove(migration, change):
 # _____________________________________________
 
 
+def figure_deploy_to_change(dba, migration, to):
+
+    if to is None:
+        msg = "Deploying all pending changes to '{}'".format(migration.project)
+        return to, msg
+
+    # Check 'to' is a tag
+    name = dba.fetch_change_by_tag(to)
+    if name:
+        msg = "Deploying pending changes from '{}'. Last tag to deploy: '{}'".format(
+            migration.project, to)
+        return name, msg
+
+    # 'to' is supposed to be a change name
+    if plan_record_exists(dba, migration, to):
+        msg = "Deploying pending changes from '{}'. Last change to deploy: '{}'".format(
+            migration.project, to)
+        return to, msg
+
+    click.echo(message="Change '{}' not found".format(to))
+    sys.exit(1)
+# _____________________________________________
+
+
 def figure_revert_upto_change(dba, migration, upto):
     pat1 = re.compile(r'^HEAD$')
     pat2 = re.compile(r'^HEAD~(\d+)$')
@@ -576,7 +644,6 @@ def figure_revert_upto_change(dba, migration, upto):
         return name, msg
 
     # Figure out HEAD[~\d+] pattern passed
-#     changes = plan_file_entries(migration)
     if pat1.match(upto):
         # last change
         change = dba.fetch_deployed_changes(limit=1)[0]
@@ -613,39 +680,16 @@ def figure_revert_upto_change(dba, migration, upto):
 
 @cli.command()
 @click.option('-y', '--yes', is_flag=True, callback=not_revert_if_false, expose_value=False, prompt='Revert?')
-@click.option('--to-change', 'to_change_name', cls=MutuallyExclusiveOption, mutually_exclusive=['to_tag_name'])
-@click.option('--to-tag', 'to_tag_name', cls=MutuallyExclusiveOption, mutually_exclusive=['to_change_name'])
 @pass_migration
-def revert(migration, to_change_name=None, to_tag_name=None):
+@click.option('--to')
+def revert(migration, to=None):
     """
     Revert deployed
     """
     try:
 
         dba = connect_dba(migration)
-        if to_change_name is None and to_tag_name is None:
-            msg = "Reverting all changes to '{}'".format(migration.project)
-
-        if to_change_name is not None:
-            msg = "Reverting changes to '{}'. Last change to revert: {}".format(
-                migration.project, to_change_name)
-
-        if to_tag_name is not None:
-            to_change_name = dba.fetch_change_by_tag(to_tag_name)
-
-            if to_change_name is None:
-                click.echo(click.style("Tag '{}' is not found".format(to_tag_name, fg='yellow')))
-                sys.exit(1)
-
-            msg = "Reverting changes to '{}'. Last tag to deploy: '{}'".format(migration.project, to_tag_name)
-
-        lines, change_ind = change_entry_or_last(migration, to_change_name)
-        upto_change = lines[change_ind]
-
-        if not plan_record_exists(dba, migration, upto_change['name']):
-            click.echo(click.style(
-                "Change `{}` is not found in migration plan".format(upto_change['name']), fg='yellow'))
-            sys.exit(1)
+        to, msg = figure_revert_upto_change(dba, migration, to)
 
         click.echo(msg)
 
@@ -659,7 +703,7 @@ def revert(migration, to_change_name=None, to_tag_name=None):
             revert()
             dba.remove_change(changeid)
             click.echo(click.style('ok', fg='green'))
-            if name == to_change_name:
+            if name == to:
                 break
 
     except Exception:
