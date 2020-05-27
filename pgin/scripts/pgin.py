@@ -170,8 +170,8 @@ def plan_file_entries(migration):
     '''
     lines = []
     with jsonlines.open(migration.plan) as reader:
-        for l in reader:
-            lines.append(l)
+        for line in reader:
+            lines.append(line)
     return lines
 # _____________________________________________
 
@@ -287,12 +287,12 @@ def set_tag(migration, tag, msg, change):
     lines = []
     with jsonlines.open(migration.plan) as reader:
         tag_set = False
-        for l in reader:
-            if l['name'] == change:
-                l['tag'] = tag
-                l['tagmsg'] = msg
+        for line in reader:
+            if line['name'] == change:
+                line['tag'] = tag
+                line['tagmsg'] = msg
                 tag_set = True
-            lines.append(l)
+            lines.append(line)
 
         if not tag_set:
             last = lines[-1]
@@ -301,8 +301,8 @@ def set_tag(migration, tag, msg, change):
             last['tagmsg'] = msg
 
     with jsonlines.open(migration.plan, mode='w') as writer:
-        for l in lines:
-            writer.write(l)
+        for line in lines:
+            writer.write(line)
 
     changeid = get_changeid(change)
     dba = connect_dba(migration)
@@ -314,8 +314,8 @@ def set_tag(migration, tag, msg, change):
 
 def write_plan(migration, lines):
     with jsonlines.open(migration.plan, mode='w') as writer:
-        for l in lines:
-            writer.write(l)
+        for line in lines:
+            writer.write(line)
 # _____________________________________________
 
 
@@ -435,8 +435,8 @@ def deploy(migration, to=None):
 
         changes = plan_file_entries(migration)
 
-        for l in changes:
-            change = l['name']
+        for line in changes:
+            change = line['name']
             deploy, changeid = get_change_deploy(migration, dba, change)
 
             if change_deployed(migration, change):
@@ -445,8 +445,8 @@ def deploy(migration, to=None):
             click.echo(message="+ {} {} ".format(change, '.' * (MSG_LENGTH - len(change))), nl=False)
             deploy()
             dba.apply_change(changeid, change)
-            if 'tag' in l:
-                dba.apply_tag(changeid, l['tag'], l['tagmsg'])
+            if 'tag' in line:
+                dba.apply_tag(changeid, line['tag'], line['tagmsg'])
 
             click.echo(click.style('ok', fg='green'))
             if change == to:
@@ -671,9 +671,9 @@ def status(migration):
 
         lines = plan_file_entries(migration)
         undeployed = []
-        for l in lines:
-            if not change_deployed(migration, l['name']):
-                undeployed.append(l)
+        for line in lines:
+            if not change_deployed(migration, line['name']):
+                undeployed.append(line)
 
         if len(undeployed) == len(lines):
             click.echo("No changes deployed")
