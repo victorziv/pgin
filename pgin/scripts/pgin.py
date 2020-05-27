@@ -66,10 +66,10 @@ class MutuallyExclusiveOption(click.Option):
 
 class Migration(object):
 
-    def __init__(self, home, project, project_user):
+    def __init__(self, project, project_user):
         self.logger = logger
         self.conf = conf
-        self.home = home
+        self.home = os.path.abspath(os.path.join(conf['ROOTDIR'], project, '%s_migration' % project))
         self.plan_name = 'plan.jsonl'
         self.plan = os.path.join(self.home, self.plan_name)
         self.project = project
@@ -329,8 +329,7 @@ def validate_migration_home(ctx, param, value):
 
 def validate_project(ctx, param, value):
     if value is None:
-        raise click.BadParameter(
-            'PROJECT environment variable has to be set to the parent project name')
+        raise click.BadParameter('PROJECT environment variable or --project command line parameter has to be set')
 
     return value
 # _____________________________________________
@@ -339,7 +338,15 @@ def validate_project(ctx, param, value):
 def validate_project_user(ctx, param, value):
     if value is None:
         raise click.BadParameter(
-            'PROJECT_USER environment variable has to be set to the parent project generic user name')
+            'PROJECT_USER environment variable  or --project_user command line parameter has to be set')
+
+    return value
+# _____________________________________________
+
+
+def validate_workspace(ctx, param, value):
+    if value is None:
+        raise click.BadParameter('WORKSPACE environment variable or --workspace command line paramenter has to be set')
 
     return value
 # _____________________________________________
@@ -362,33 +369,32 @@ def utc_to_local(utc_dt):
 
 @click.group()
 @click.option(
-    '--home',
-    envvar='MIGRATION_HOME',
-    metavar='PATH',
-    callback=validate_migration_home,
-    help='Sets migration container folder'
-)
-@click.option(
     '--project',
     envvar='PROJECT',
     callback=validate_project,
-    help='Parent project name'
+    help='Parent project name. Default: PROJECT env variable value'
 )
 @click.option(
     '--project_user',
     envvar='PROJECT_USER',
     callback=validate_project_user,
-    help='Parent project generic user account'
+    help='Parent project generic user account. Default: PROJECT_USER env variable value'
+)
+@click.option(
+    '--workspace',
+    envvar='WORKSPACE',
+    callback=validate_workspace,
+    help='Setting DB schema and migration container. Default: WORKSPACE env variable value'
 )
 @click.version_option(get_version())
 @click.pass_context
-def cli(ctx, home, project, project_user):
+def cli(ctx, project, project_user):
     """
     pgin is a command line tool for PostgreSQL DB migrations management.
     Run with Python 3.6+.
     Uses psycopg2 DB driver.
     """
-    ctx.obj = Migration(home=os.path.abspath(home), project=project, project_user=project_user)
+    ctx.obj = Migration(project=project, project_user=project_user)
 # _____________________________________________
 
 
@@ -474,12 +480,12 @@ def init(migration, newdb=False):
     click.echo("Initiating project '{}' migrations".format(migration.project))
     click.echo('Migration container path: {}'.format(migration.home))
 
+    create_directory(migration.home)
+    turn_to_python_package(migration.home)
+
     if not os.path.exists(migration.plan):
         logger.debug("Creating migration plan file: %r", migration.plan)
         create_plan(migration.plan)
-
-    create_directory(migration.home)
-    turn_to_python_package(migration.home)
 
     for d in ['deploy', 'revert']:
         create_directory(os.path.join(migration.home, d))
