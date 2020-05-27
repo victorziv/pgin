@@ -69,6 +69,8 @@ class Migration(object):
     def __init__(self, project, project_user, workspace):
         self.logger = logger
         self.conf = conf
+        self.workspace = workspace
+        self.workdir = '%s_migration' % workspace
         self.home = os.path.abspath(os.path.join(conf['ROOTDIR'], project, '%s_migration' % workspace))
         self.plan_name = 'plan.jsonl'
         self.plan = os.path.join(self.home, self.plan_name)
@@ -178,7 +180,7 @@ def plan_file_entries(migration):
 
 def get_change_deploy(migration, dba, change):
     changeid = get_changeid(change)
-    mod = importlib.import_module('%s.deploy.%s' % (conf['DBMIGRATION_PKG'], change))
+    mod = importlib.import_module('%s.deploy.%s' % (migration.workdir, change))
     deploy_cls = getattr(mod, change.capitalize())
 
     deploy = deploy_cls(
@@ -199,7 +201,7 @@ def get_changeid(change):
 
 
 def get_change_revert(migration, dba, change):
-    mod = importlib.import_module('%s.revert.%s' % (conf['DBMIGRATION_PKG'], change))
+    mod = importlib.import_module('%s.revert.%s' % (migration.workdir, change))
     revert_cls = getattr(mod, change.capitalize())
 
     revert = revert_cls(
