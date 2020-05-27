@@ -66,10 +66,12 @@ class MutuallyExclusiveOption(click.Option):
 
 class Migration(object):
 
-    def __init__(self, home, project, project_user):
+    def __init__(self, project, project_user, workspace):
         self.logger = logger
         self.conf = conf
-        self.home = home
+        self.workspace = workspace
+        self.workdir = '%s_migration' % workspace
+        self.home = os.path.abspath(os.path.join(conf['ROOTDIR'], project, '%s_migration' % workspace))
         self.plan_name = 'plan.jsonl'
         self.plan = os.path.join(self.home, self.plan_name)
         self.project = project
@@ -170,15 +172,15 @@ def plan_file_entries(migration):
     '''
     lines = []
     with jsonlines.open(migration.plan) as reader:
-        for l in reader:
-            lines.append(l)
+        for line in reader:
+            lines.append(line)
     return lines
 # _____________________________________________
 
 
 def get_change_deploy(migration, dba, change):
     changeid = get_changeid(change)
-    mod = importlib.import_module('%s.deploy.%s' % (conf['DBMIGRATION_PKG'], change))
+    mod = importlib.import_module('%s.deploy.%s' % (migration.workdir, change))
     deploy_cls = getattr(mod, change.capitalize())
 
     deploy = deploy_cls(
@@ -199,7 +201,7 @@ def get_changeid(change):
 
 
 def get_change_revert(migration, dba, change):
-    mod = importlib.import_module('%s.revert.%s' % (conf['DBMIGRATION_PKG'], change))
+    mod = importlib.import_module('%s.revert.%s' % (migration.workdir, change))
     revert_cls = getattr(mod, change.capitalize())
 
     revert = revert_cls(
@@ -287,12 +289,12 @@ def set_tag(migration, tag, msg, change):
     lines = []
     with jsonlines.open(migration.plan) as reader:
         tag_set = False
-        for l in reader:
-            if l['name'] == change:
-                l['tag'] = tag
-                l['tagmsg'] = msg
+        for line in reader:
+            if line['name'] == change:
+                line['tag'] = tag
+                line['tagmsg'] = msg
                 tag_set = True
-            lines.append(l)
+            lines.append(line)
 
         if not tag_set:
             last = lines[-1]
@@ -301,8 +303,8 @@ def set_tag(migration, tag, msg, change):
             last['tagmsg'] = msg
 
     with jsonlines.open(migration.plan, mode='w') as writer:
-        for l in lines:
-            writer.write(l)
+        for line in lines:
+            writer.write(line)
 
     changeid = get_changeid(change)
     dba = connect_dba(migration)
@@ -314,8 +316,8 @@ def set_tag(migration, tag, msg, change):
 
 def write_plan(migration, lines):
     with jsonlines.open(migration.plan, mode='w') as writer:
-        for l in lines:
-            writer.write(l)
+        for line in lines:
+            writer.write(line)
 # _____________________________________________
 
 
@@ -329,8 +331,7 @@ def validate_migration_home(ctx, param, value):
 
 def validate_project(ctx, param, value):
     if value is None:
-        raise click.BadParameter(
-            'PROJECT environment variable has to be set to the parent project name')
+        raise click.BadParameter('PROJECT environment variable or --project command line parameter has to be set')
 
     return value
 # _____________________________________________
@@ -339,7 +340,15 @@ def validate_project(ctx, param, value):
 def validate_project_user(ctx, param, value):
     if value is None:
         raise click.BadParameter(
-            'PROJECT_USER environment variable has to be set to the parent project generic user name')
+            'PROJECT_USER environment variable  or --project_user command line parameter has to be set')
+
+    return value
+# _____________________________________________
+
+
+def validate_workspace(ctx, param, value):
+    if value is None:
+        raise click.BadParameter('WORKSPACE environment variable or --workspace command line paramenter has to be set')
 
     return value
 # _____________________________________________
@@ -362,33 +371,32 @@ def utc_to_local(utc_dt):
 
 @click.group()
 @click.option(
-    '--home',
-    envvar='MIGRATION_HOME',
-    metavar='PATH',
-    callback=validate_migration_home,
-    help='Sets migration container folder'
-)
-@click.option(
     '--project',
     envvar='PROJECT',
     callback=validate_project,
-    help='Parent project name'
+    help='Parent project name. Default: PROJECT env variable value'
 )
 @click.option(
     '--project_user',
     envvar='PROJECT_USER',
     callback=validate_project_user,
-    help='Parent project generic user account'
+    help='Parent project generic user account. Default: PROJECT_USER env variable value'
+)
+@click.option(
+    '--workspace',
+    envvar='WORKSPACE',
+    callback=validate_workspace,
+    help='Setting DB schema and migration container. Default: WORKSPACE env variable value'
 )
 @click.version_option(get_version())
 @click.pass_context
-def cli(ctx, home, project, project_user):
+def cli(ctx, project, project_user, workspace):
     """
     pgin is a command line tool for PostgreSQL DB migrations management.
     Run with Python 3.6+.
     Uses psycopg2 DB driver.
     """
-    ctx.obj = Migration(home=os.path.abspath(home), project=project, project_user=project_user)
+    ctx.obj = Migration(project=project, project_user=project_user, workspace=workspace)
 # _____________________________________________
 
 
@@ -435,8 +443,8 @@ def deploy(migration, to=None):
 
         changes = plan_file_entries(migration)
 
-        for l in changes:
-            change = l['name']
+        for line in changes:
+            change = line['name']
             deploy, changeid = get_change_deploy(migration, dba, change)
 
             if change_deployed(migration, change):
@@ -445,8 +453,8 @@ def deploy(migration, to=None):
             click.echo(message="+ {} {} ".format(change, '.' * (MSG_LENGTH - len(change))), nl=False)
             deploy()
             dba.apply_change(changeid, change)
-            if 'tag' in l:
-                dba.apply_tag(changeid, l['tag'], l['tagmsg'])
+            if 'tag' in line:
+                dba.apply_tag(changeid, line['tag'], line['tagmsg'])
 
             click.echo(click.style('ok', fg='green'))
             if change == to:
@@ -463,72 +471,6 @@ def deploy(migration, to=None):
 # _____________________________________________
 
 
-# @cli.command()
-# @click.option('--to-change', 'to_change_name', cls=MutuallyExclusiveOption, mutually_exclusive=['to_tag_name'])
-# @click.option('--to-tag', 'to_tag_name', cls=MutuallyExclusiveOption, mutually_exclusive=['to_change_name'])
-# @pass_migration
-# def deploy(migration, to_change_name=None, to_tag_name=None):
-#     """
-#     Deploys pending changes
-#     """
-
-#     try:
-#         dba = connect_dba(migration)
-
-#         if to_change_name is None and to_tag_name is None:
-#             msg = "Deploying all pending changes to '{}'".format(migration.project)
-
-#         if to_change_name is not None:
-#             msg = "Deploying pending changes to '{}'. Last change to deploy: {}".format(
-#                 migration.project, to_change_name)
-
-#         if to_tag_name is not None:
-#             to_change_name = dba.fetch_change_by_tag(to_tag_name)
-
-#             if to_change_name is None:
-#                 click.echo(click.style("Tag '{}' is not found".format(to_tag_name, fg='yellow')))
-#                 sys.exit(1)
-
-#             msg = "Deploying pending changes to '{}'. Last tag to deploy: '{}'".format(migration.project, to_tag_name)
-
-#         lines, change_ind = change_entry_or_last(migration, to_change_name)
-#         upto_change = lines[change_ind]
-
-#         if not plan_record_exists(dba, migration, upto_change['name']):
-#             click.echo(click.style(
-#                 "Change `{}` is not found in migration plan".format(upto_change['name']), fg='yellow'))
-#             sys.exit(1)
-
-#         click.echo(msg)
-
-#         for l in lines:
-#             change = l['name']
-#             deploy, changeid = get_change_deploy(migration, dba, change)
-
-#             if change_deployed(migration, change):
-#                 continue
-
-#             click.echo(message="+ {} {} ".format(change, '.' * (MSG_LENGTH - len(change))), nl=False)
-#             deploy()
-#             dba.apply_change(changeid, change)
-#             if 'tag' in l:
-#                 dba.apply_tag(changeid, l['tag'], l['tagmsg'])
-
-#             click.echo(click.style('ok', fg='green'))
-#             if change == upto_change['name']:
-#                 break
-
-#     except psycopg2.ProgrammingError as pe:
-#         click.echo(click.style('fail', fg='red'))
-#         click.echo("!!! Error in deploy: {}".format(pe))
-#         logger.exception('Exception in deploy')
-#     except Exception:
-#         logger.exception('Exception in deploy')
-#     finally:
-#         disconnect_dba(dba)
-# _____________________________________________
-
-
 @cli.command()
 @click.option('--newdb', is_flag=True, required=False, help="If set to TRUE drops and re-creates existent DB")
 @pass_migration
@@ -540,12 +482,12 @@ def init(migration, newdb=False):
     click.echo("Initiating project '{}' migrations".format(migration.project))
     click.echo('Migration container path: {}'.format(migration.home))
 
+    create_directory(migration.home)
+    turn_to_python_package(migration.home)
+
     if not os.path.exists(migration.plan):
         logger.debug("Creating migration plan file: %r", migration.plan)
         create_plan(migration.plan)
-
-    create_directory(migration.home)
-    turn_to_python_package(migration.home)
 
     for d in ['deploy', 'revert']:
         create_directory(os.path.join(migration.home, d))
@@ -737,9 +679,9 @@ def status(migration):
 
         lines = plan_file_entries(migration)
         undeployed = []
-        for l in lines:
-            if not change_deployed(migration, l['name']):
-                undeployed.append(l)
+        for line in lines:
+            if not change_deployed(migration, line['name']):
+                undeployed.append(line)
 
         if len(undeployed) == len(lines):
             click.echo("No changes deployed")
