@@ -66,10 +66,10 @@ class MutuallyExclusiveOption(click.Option):
 
 class Migration(object):
 
-    def __init__(self, project, project_user):
+    def __init__(self, project, project_user, workspace):
         self.logger = logger
         self.conf = conf
-        self.home = os.path.abspath(os.path.join(conf['ROOTDIR'], project, '%s_migration' % project))
+        self.home = os.path.abspath(os.path.join(conf['ROOTDIR'], project, '%s_migration' % workspace))
         self.plan_name = 'plan.jsonl'
         self.plan = os.path.join(self.home, self.plan_name)
         self.project = project
@@ -388,13 +388,13 @@ def utc_to_local(utc_dt):
 )
 @click.version_option(get_version())
 @click.pass_context
-def cli(ctx, project, project_user):
+def cli(ctx, project, project_user, workspace):
     """
     pgin is a command line tool for PostgreSQL DB migrations management.
     Run with Python 3.6+.
     Uses psycopg2 DB driver.
     """
-    ctx.obj = Migration(project=project, project_user=project_user)
+    ctx.obj = Migration(project=project, project_user=project_user, workspace=workspace)
 # _____________________________________________
 
 
