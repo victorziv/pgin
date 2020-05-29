@@ -66,12 +66,11 @@ class MutuallyExclusiveOption(click.Option):
 
 class Migration(object):
 
-    def __init__(self, project, project_user, workspace):
+    def __init__(self, project, project_user):
         self.logger = logger
         self.conf = conf
-        self.workspace = workspace
-        self.workdir = '%s_migration' % workspace
-        self.home = os.path.abspath(os.path.join(conf['ROOTDIR'], project, '%s_migration' % workspace))
+        self.workdir = 'migration'
+        self.home = os.path.abspath(os.path.join(conf['ROOTDIR'], project, self.workdir))
         self.plan_name = 'plan.jsonl'
         self.plan = os.path.join(self.home, self.plan_name)
         self.project = project
@@ -128,8 +127,7 @@ def connect_dba(migration):
     dburi = Config.db_connection_uri(migration.project, migration.project_user)
     dba.conn = dba.connectdb(dburi)
     dba.cursor = dba.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    workschema = '%swork' % conf['PROJECT']
-    dba.set_search_path(workschema)
+    dba.set_search_path(schema=conf['PROJECT'])
     return dba
 # _____________________________________________
 
@@ -346,14 +344,6 @@ def validate_project_user(ctx, param, value):
 # _____________________________________________
 
 
-def validate_workspace(ctx, param, value):
-    if value is None:
-        raise click.BadParameter('WORKSPACE environment variable or --workspace command line paramenter has to be set')
-
-    return value
-# _____________________________________________
-
-
 def update_plan(migration, name, msg):
     with jsonlines.open(migration.plan, mode='a') as writer:
         writer.write({
@@ -382,21 +372,15 @@ def utc_to_local(utc_dt):
     callback=validate_project_user,
     help='Parent project generic user account. Default: PROJECT_USER env variable value'
 )
-@click.option(
-    '--workspace',
-    envvar='WORKSPACE',
-    callback=validate_workspace,
-    help='Setting DB schema and migration container. Default: WORKSPACE env variable value'
-)
 @click.version_option(get_version())
 @click.pass_context
-def cli(ctx, project, project_user, workspace):
+def cli(ctx, project, project_user):
     """
     pgin is a command line tool for PostgreSQL DB migrations management.
     Run with Python 3.6+.
     Uses psycopg2 DB driver.
     """
-    ctx.obj = Migration(project=project, project_user=project_user, workspace=workspace)
+    ctx.obj = Migration(project=project, project_user=project_user)
 # _____________________________________________
 
 
