@@ -366,7 +366,7 @@ class DBAdmin:
         params = ()
         self.cursor.execute(query, params)
         fetch = self.cursor.fetchone()
-        self.logger.debug("Search path fetch: %s", fetch)
+        self.logger.debug("Pgin DBA: search path set to: %s", fetch)
 
         return fetch['search_path']
     # _____________________________
