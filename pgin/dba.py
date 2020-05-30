@@ -157,32 +157,31 @@ class DBAdmin:
         self.conn.commit()
     # _____________________________
 
-#     def connectdb(self, dburi):
-#         try:
-#             conn = psycopg2.connect(dburi)
-#             return conn
-
-#         except psycopg2.OperationalError as e:
-#             if 'does not exist' in str(e):
-#                 self.logger.error("OOPS: {}".format(e))
-#                 return
-#             else:
-#                 raise
-    # ___________________________
-
     def connectdb(self, dburi):
         return psycopg2.connect(dburi)
     # ___________________________
 
-    def disconnect_all_from_db(self, cursor, dbname):
-        query = """
-            SELECT pg_terminate_backend(pid)
+    def drop_other_connections(self, dbname):
+        query = '''
+            SELECT pg_terminate_backend(pg_stat_activity.pid)
             FROM pg_stat_activity
-            WHERE pid <> pg_backend_pid()
-            AND datname = %s
-        """
-        params = (dbname,)
-        cursor.execute(query, params)
+            WHERE pg_stat_activity.datname = %s
+            AND pid <> pg_backend_pid();
+        '''
+        params = [dbname]
+        self.cursor.execute(query, params)
+        self.conn.commit()
+    # ___________________________
+
+#     def disconnect_all_from_db(self, cursor, dbname):
+#         query = """
+#             SELECT pg_terminate_backend(pid)
+#             FROM pg_stat_activity
+#             WHERE pid <> pg_backend_pid()
+#             AND datname = %s
+#         """
+#         params = (dbname,)
+#         cursor.execute(query, params)
     # ___________________________________________
 
     def dropdb(self, db_to_drop=None):
