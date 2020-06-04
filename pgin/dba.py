@@ -14,6 +14,7 @@ class DBAdmin:
         self.dbname = dbname
         self.dbuser = dbuser
         self.meta_schema = 'pgin'
+        self.dburi = Config.db_connection_uri(dbname=dbname, dbuser=dbuser)
     # __________________________________________
 
     def apply_change(self, changeid, change):
@@ -157,7 +158,9 @@ class DBAdmin:
         self.conn.commit()
     # _____________________________
 
-    def connectdb(self, dburi):
+    def connectdb(self, dburi=None):
+        if dburi is None:
+            dburi = self.dburi
         return psycopg2.connect(dburi)
     # ___________________________
 
