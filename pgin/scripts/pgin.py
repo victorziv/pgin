@@ -87,6 +87,40 @@ pass_migration = click.make_pass_decorator(Migration)
 # _____________________________________________
 
 
+def deploy_testing(project, dba, dbuser, dbname):
+    """
+    Deploys all changes into testing DB
+    """
+
+    try:
+        migration = Migration(project=project, project_user=dbuser)
+        dburi = Config.db_connection_uri(dbname=dbname, dbuser=dbuser)
+        dba.conn = dba.connectdb(dburi)
+        dba.cursor = dba.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        dba.set_search_path(schema=project)
+        dba.show_search_path()
+
+        changes = plan_file_entries(migration)
+
+        for line in changes:
+            change = line['name']
+            deploy = load_deploy_script(migration, dba, change)
+
+            click.echo(message="+ {} {} ".format(change, '.' * (MSG_LENGTH - len(change))), nl=False)
+            deploy()
+            click.echo(click.style('ok', fg='green'))
+
+    except psycopg2.ProgrammingError as pe:
+        click.echo(click.style('fail', fg='red'))
+        click.echo("!!! Error in deploy: {}".format(pe))
+        logger.exception('Exception in deploy')
+    except Exception:
+        logger.exception('Exception in deploy')
+    finally:
+        disconnect_dba(dba)
+# _____________________________________________
+
+
 def change_deployed(migration, change):
     dba = connect_dba(migration)
     changeid = dba.fetch_deployed_changeid_by_name(change)
@@ -211,6 +245,22 @@ def get_change_revert(migration, dba, change):
     )
 
     return revert
+# _____________________________________________
+
+
+def load_deploy_script(migration, dba, change):
+    mod = importlib.import_module('%s.deploy.%s' % (migration.workdir, change))
+    deploy_cls = getattr(mod, change.capitalize())
+
+    deploy = deploy_cls(
+        project=migration.project,
+        project_user=migration.project_user,
+        conf=migration.conf,
+        conn=dba.conn,
+        logger=migration.logger
+    )
+
+    return deploy
 # _____________________________________________
 
 
