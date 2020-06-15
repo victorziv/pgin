@@ -1,5 +1,5 @@
 import os
-from setuptools import setup
+from setuptools import setup, find_packages
 APP = 'pgin'
 here = os.path.abspath(os.path.dirname(__file__))
 # ==========================
@@ -11,12 +11,20 @@ def read_version():
     return version
 # ______________________________
 
+#     py_modules=[APP],
+
 
 setup(
     name=APP,
     version=read_version(),
-    py_modules=[APP],
+    author="Victor Ziv",
+    author_email="vziv@infinidat.com",
+    url='https://git.infinidat.com/ivt/%s.git' % APP,
+    packages=find_packages(),
+    license='Proprietary',
     description='Very dedicated PostgreSQL DB migration utility. Using Python 3.6+ and psycopg2',
+    long_description=open('README.rst').read(),
+    long_description_content_type="text/x-rst",
     install_requires=[
         'jinja2',
         'psycopg2',
@@ -25,6 +33,8 @@ setup(
         'colorama',
         'tabulate'
     ],
+    include_package_data=True,
+    python_requires='>=3.6',
 
     entry_points='''
         [console_scripts]
