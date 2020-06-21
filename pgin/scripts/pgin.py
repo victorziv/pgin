@@ -24,7 +24,7 @@ from lib import applogging  # noqa
 execid = 'pgin'
 logger = applogging.set_logger(
     logger_name=execid,
-    logpath=os.path.join(conf['LOGDIR'], execid),
+    logpath=os.path.join(conf['LOGDIR'], '%s.log' % execid),
     log_to_console=True
 )
 
@@ -612,6 +612,7 @@ def figure_deploy_to_change(dba, migration, to):
 
 
 def figure_revert_upto_change(dba, migration, upto):
+    logger.debug("Revert upto: %r", upto)
     pat1 = re.compile(r'^HEAD$')
     pat2 = re.compile(r'^HEAD~(\d+)$')
 
