@@ -21,7 +21,12 @@ if runtype is None:
 conf = Configurator.configure(config_type=runtype)
 
 from lib import applogging  # noqa 
-logger = applogging.set_logger(logger_name=conf['PROJECT'], log_to_console=True)
+execid = 'pgin'
+logger = applogging.set_logger(
+    logger_name=execid,
+    logpath=os.path.join(conf['LOGDIR'], execid),
+    log_to_console=True
+)
 
 from pgin.lib.helpers import create_directory  # noqa
 from pgin.dba import DBAdmin  # noqa
