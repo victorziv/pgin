@@ -1,6 +1,7 @@
 import os
 import sys
-import hashlib
+# import hashlib
+import uuid
 import importlib
 import click
 import re
@@ -175,6 +176,7 @@ def create_pgin_metaschema(dba):
     dba.create_meta_schema()
     dba.create_plan_table()
     dba.create_changes_table()
+    dba.create_tags_table()
 # _____________________________________________
 
 
@@ -215,10 +217,10 @@ def plan_file_entries(migration):
 # _____________________________________________
 
 
-def get_change_deploy(migration, dba, change):
-    changeid = get_changeid(change)
-    mod = importlib.import_module('%s.deploy.%s' % (migration.workdir, change))
-    deploy_cls = getattr(mod, change.capitalize())
+def get_change_deploy(migration, dba, name):
+#     changeid = get_changeid(change)
+    mod = importlib.import_module('%s.deploy.%s' % (migration.workdir, name))
+    deploy_cls = getattr(mod, name.capitalize())
 
     deploy = deploy_cls(
         project=migration.project,
@@ -228,12 +230,16 @@ def get_change_deploy(migration, dba, change):
         logger=migration.logger
     )
 
-    return deploy, changeid
+    return deploy
 # _____________________________________________
 
 
-def get_changeid(change):
-    return hashlib.sha1(change.encode('utf-8')).hexdigest()
+# def get_changeid(change):
+#     return hashlib.sha1(change.encode('utf-8')).hexdigest()
+# _____________________________________________
+
+def generate_changeid(change):
+    return uuid.uuid4().hex
 # _____________________________________________
 
 
@@ -330,20 +336,21 @@ def populate_plan_table(migration, dba):
     click.echo("Sync plan file into DB metaschema plan table")
     changes = plan_file_entries(migration)
     for change in changes:
-        change_name = change['name']
-        click.echo(message="+ {} {} ".format(change_name, '.' * (MSG_LENGTH - len(change_name))), nl=False)
-        changeid = get_changeid(change_name)
-        dba.apply_planned(changeid, change_name, change['msg'])
+        changeid = change['changeid']
+        name = change['name']
+
+        click.echo(message="+ {} {} ".format(name, '.' * (MSG_LENGTH - len(name))), nl=False)
+        dba.apply_planned(changeid, name, change['msg'])
         click.echo(click.style('ok', fg='green'))
 # _____________________________________________
 
 
-def set_tag(migration, tag, msg, change):
+def set_tag(migration, tag, msg, name):
     lines = []
     with jsonlines.open(migration.plan) as reader:
         tag_set = False
         for line in reader:
-            if line['name'] == change:
+            if line['name'] == name:
                 line['tag'] = tag
                 line['tagmsg'] = msg
                 tag_set = True
@@ -359,9 +366,8 @@ def set_tag(migration, tag, msg, change):
         for line in lines:
             writer.write(line)
 
-    changeid = get_changeid(change)
     dba = connect_dba(migration)
-    dba.apply_tag(changeid, tag, msg)
+    dba.apply_tag(line['changeid'], tag, msg)
 
     click.echo("Tag {} applied to change {}".format(tag, change))
 # _____________________________________________
@@ -399,9 +405,10 @@ def validate_project_user(ctx, param, value):
 # _____________________________________________
 
 
-def update_plan(migration, name, msg):
+def update_plan(migration, changeid, name, msg):
     with jsonlines.open(migration.plan, mode='a') as writer:
         writer.write({
+            'changeid': changeid,
             'name': name,
             'msg': msg,
         })
@@ -443,26 +450,26 @@ def cli(ctx, project, project_user):
 @click.argument('change')
 @click.option('-m', '--msg', required=True, help="Short migration description")
 @pass_migration
-def add(migration, change, msg):
+def add(migration, name, msg):
     """
     Adds migration script to the plan
     """
 
     os.chdir(migration.home)
     dba = connect_dba(migration)
-    if plan_record_exists(dba, migration, change):
-        click.echo(message='Change {} already exists in migration plan'.format(change))
+    if plan_record_exists(dba, migration, name):
+        click.echo(message='Change {} already exists in migration plan'.format(name))
         sys.exit(0)
 
-    update_plan(migration, change, msg)
-    changeid = get_changeid(change)
-    dba.apply_planned(changeid, change, msg)
+    changeid = generate_changeid()
+    update_plan(migration, changeid, name, msg)
+    dba.apply_planned(changeid, name, msg)
 
     for direction in ['deploy', 'revert']:
-        if not script_exists(migration, direction, change):
-            create_script(migration, direction, change)
+        if not script_exists(migration, direction, name):
+            create_script(migration, direction, name)
 
-    click.echo("Change '{}' has been added".format(change))
+    click.echo("Change '{}' has been added".format(name))
 # _____________________________________________
 
 
@@ -483,20 +490,21 @@ def deploy(migration, to=None):
         changes = plan_file_entries(migration)
 
         for line in changes:
-            change = line['name']
-            deploy, changeid = get_change_deploy(migration, dba, change)
+            changeid = line['changeid']
+            name = line['name']
+            deploy = get_change_deploy(migration, dba, name)
 
-            if change_deployed(migration, change):
+            if change_deployed(migration, changeid):
                 continue
 
-            click.echo(message="+ {} {} ".format(change, '.' * (MSG_LENGTH - len(change))), nl=False)
+            click.echo(message="+ {} {} ".format(name, '.' * (MSG_LENGTH - len(name))), nl=False)
             deploy()
-            dba.apply_change(changeid, change)
+            dba.apply_change(changeid, name)
             if 'tag' in line:
                 dba.apply_tag(changeid, line['tag'], line['tagmsg'])
 
             click.echo(click.style('ok', fg='green'))
-            if change == to:
+            if name == to:
                 break
 
     except psycopg2.ProgrammingError as pe:
@@ -797,9 +805,8 @@ def tag_add(migration, tag, msg, change=None):
 
     write_plan(migration, lines)
 
-    changeid = get_changeid(change_line['name'])
     dba = connect_dba(migration)
-    dba.apply_tag(changeid, tag, msg)
+    dba.apply_tag(change_line['changeid'], tag, msg)
 
     click.echo(click.style("Tag '{}' was applied to change '{}'".format(tag, change_line['name']), fg='green'))
 # _____________________________________________

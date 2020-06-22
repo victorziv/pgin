@@ -116,12 +116,13 @@ class DBAdmin:
     def create_changes_table(self):
         query = """
            CREATE TABLE IF NOT EXISTS %s.changes (
-               changeid CHAR(40) PRIMARY KEY,
-               name VARCHAR(100) UNIQUE,
-               applied TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL
+               changeid uuid PRIMARY KEY,
+               name VARCHAR(256) UNIQUE REFERENCES %s.plan(name),
+               applied TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL,
+               FOREIGN KEY(changeid) REFERENCES %s.plan(changeid) ON UPDATE CASCADE
            )
         """
-        params = [AsIs(self.meta_schema)]
+        params = [AsIs(self.meta_schema), AsIs(self.meta_schema)]
         self.cursor.execute(query, params)
         self.conn.commit()
     # _____________________________
@@ -129,8 +130,8 @@ class DBAdmin:
     def create_plan_table(self):
         query = """
            CREATE TABLE IF NOT EXISTS %s.plan (
-               changeid CHAR(40) PRIMARY KEY,
-               name VARCHAR(100) UNIQUE,
+               changeid uuid PRIMARY KEY,
+               name VARCHAR(256) UNIQUE,
                planned TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL,
                msg TEXT,
                tag VARCHAR(100) UNIQUE,
@@ -146,11 +147,11 @@ class DBAdmin:
     def create_tags_table(self):
         query = """
            CREATE TABLE IF NOT EXISTS %s.tags (
-               changeid CHAR(40) PRIMARY KEY,
+               changeid uuid PRIMARY KEY,
                tag VARCHAR(100) UNIQUE,
                msg TEXT,
                tagged TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL,
-               FOREIGN KEY(changeid) REFERENCES %s.changes(changeid) ON DELETE CASCADE
+               FOREIGN KEY(changeid) REFERENCES %s.plan(changeid) ON UPDATE CASCADE
            )
         """
         params = [AsIs(self.meta_schema), AsIs(self.meta_schema)]
