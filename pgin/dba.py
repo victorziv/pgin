@@ -201,6 +201,23 @@ class DBAdmin:
             admin_conn.close()
     # ___________________________
 
+    def fetch_change_deployed(self, changeid):
+
+        query = '''
+           SELECT COUNT(*) AS deployed
+           FROM %s.changes
+           WHERE changeid = %s
+        '''
+        params = [AsIs(self.meta_schema), changeid]
+
+        self.cursor.execute(query, params)
+        fetch = self.cursor.fetchone()
+        if fetch is None:
+            return False
+
+        return dict(fetch)['deployed']
+    # _____________________________
+
     def fetch_deployed_changes(self, offset=0, limit=None):
         query = """
             SELECT

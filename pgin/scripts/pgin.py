@@ -127,12 +127,9 @@ def deploy_testing(project, dba, dbuser, dbname):
 # _____________________________________________
 
 
-def change_deployed(migration, change):
+def change_deployed(migration, changeid):
     dba = connect_dba(migration)
-    changeid = dba.fetch_deployed_changeid_by_name(change)
-    if changeid is not None:
-        return True
-    return False
+    return dba.fetch_change_deployed(changeid)
 # _____________________________________________
 
 
@@ -218,7 +215,6 @@ def plan_file_entries(migration):
 
 
 def get_change_deploy(migration, dba, name):
-#     changeid = get_changeid(change)
     mod = importlib.import_module('%s.deploy.%s' % (migration.workdir, name))
     deploy_cls = getattr(mod, name.capitalize())
 
@@ -238,7 +234,7 @@ def get_change_deploy(migration, dba, name):
 #     return hashlib.sha1(change.encode('utf-8')).hexdigest()
 # _____________________________________________
 
-def generate_changeid(change):
+def generate_changeid():
     return uuid.uuid4().hex
 # _____________________________________________
 
@@ -326,9 +322,7 @@ def turn_to_python_package(path):
 
 def plan_record_exists(dba, migration, change):
     changeid = dba.fetch_planned_changeid_by_name(change)
-    if changeid is None:
-        return False
-    return True
+    return changeid
 # _____________________________________________
 
 
@@ -457,7 +451,8 @@ def add(migration, name, msg):
 
     os.chdir(migration.home)
     dba = connect_dba(migration)
-    if plan_record_exists(dba, migration, name):
+    changeid = dba.fetch_planned_changeid_by_name(name)
+    if changeid:
         click.echo(message='Change {} already exists in migration plan'.format(name))
         sys.exit(0)
 
@@ -491,11 +486,11 @@ def deploy(migration, to=None):
 
         for line in changes:
             changeid = line['changeid']
-            name = line['name']
-            deploy = get_change_deploy(migration, dba, name)
-
             if change_deployed(migration, changeid):
                 continue
+
+            name = line['name']
+            deploy = get_change_deploy(migration, dba, name)
 
             click.echo(message="+ {} {} ".format(name, '.' * (MSG_LENGTH - len(name))), nl=False)
             deploy()
@@ -548,6 +543,7 @@ def init(migration, newdb=False):
         if newdb:
             sure = input("Sure to drop existing DB {}? (Yes/No) ".format(migration.project).lower())
             if sure in ['y', 'yes']:
+                upgrade_plan_file(migration)
                 click.echo("Dropping DB {}".format(migration.project))
                 dba.dropdb()
             else:
@@ -566,9 +562,9 @@ def init(migration, newdb=False):
 
 @cli.command()
 @click.option('-y', '--yes', is_flag=True, callback=not_remove_if_false, expose_value=False, prompt='Remove change?')
-@click.argument('change', required=True)
+@click.argument('name', required=True)
 @pass_migration
-def remove(migration, change):
+def remove(migration, name):
     """
     Adds migration script to the plan
     """
@@ -576,22 +572,23 @@ def remove(migration, change):
     try:
         dba = connect_dba(migration)
         os.chdir(migration.home)
-        if not plan_record_exists(dba, migration, change):
-            click.echo("Change {} not found in migration plan".format(change))
+        changeid = plan_record_exists(dba, migration, name)
+        if not changeid:
+            click.echo("Change {} not found in migration plan".format(name))
             sys.exit(0)
 
-        if change_deployed(migration, change):
-            click.echo("Cannot remove a deployed change {}. Revert first".format(change))
+        if change_deployed(migration, changeid):
+            click.echo("Cannot remove a deployed change {}. Revert first".format(name))
             sys.exit(1)
 
-        click.echo("Removing change %s from migration plan" % change)
-        remove_from_plan(migration, change)
-        dba.remove_change_from_plan(change)
+        click.echo("Removing change %s from migration plan" % name)
+        remove_from_plan(migration, changeid)
+        dba.remove_change_from_plan(changeid)
     finally:
         disconnect_dba(dba)
 
     for direction in ['deploy', 'revert']:
-        remove_script(migration, direction, change)
+        remove_script(migration, direction, name)
 # _____________________________________________
 
 
@@ -809,6 +806,15 @@ def tag_add(migration, tag, msg, change=None):
     dba.apply_tag(change_line['changeid'], tag, msg)
 
     click.echo(click.style("Tag '{}' was applied to change '{}'".format(tag, change_line['name']), fg='green'))
+# _____________________________________________
+
+
+def upgrade_plan_file(migration):
+    changes = plan_file_entries(migration)
+    for change in changes:
+        change['changeid'] = generate_changeid()
+
+    write_plan(migration, changes)
 # _____________________________________________
 
 
