@@ -725,7 +725,7 @@ def status(migration):
         lines = plan_file_entries(migration)
         undeployed = []
         for line in lines:
-            if not change_deployed(migration, line['name']):
+            if not change_deployed(migration, line['changeid']):
                 undeployed.append(line)
 
         if len(undeployed) == len(lines):
