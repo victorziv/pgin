@@ -115,14 +115,14 @@ class DBAdmin:
 
     def create_changes_table(self):
         query = """
-           CREATE TABLE IF NOT EXISTS %s.changes (
+           CREATE TABLE IF NOT EXISTS %(meta_schema)s.changes (
                changeid uuid PRIMARY KEY,
-               name VARCHAR(256) UNIQUE REFERENCES %s.plan(name),
+               name VARCHAR(256) UNIQUE REFERENCES %(meta_schema)s.plan(name),
                applied TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL,
-               FOREIGN KEY(changeid) REFERENCES %s.plan(changeid) ON UPDATE CASCADE
+               FOREIGN KEY(changeid) REFERENCES %(meta_schema)s.plan(changeid) ON UPDATE CASCADE
            )
         """
-        params = [AsIs(self.meta_schema), AsIs(self.meta_schema)]
+        params = {'meta_schema': AsIs(self.meta_schema)}
         self.cursor.execute(query, params)
         self.conn.commit()
     # _____________________________
@@ -176,17 +176,6 @@ class DBAdmin:
         self.cursor.execute(query, params)
         self.conn.commit()
     # ___________________________
-
-#     def disconnect_all_from_db(self, cursor, dbname):
-#         query = """
-#             SELECT pg_terminate_backend(pid)
-#             FROM pg_stat_activity
-#             WHERE pid <> pg_backend_pid()
-#             AND datname = %s
-#         """
-#         params = (dbname,)
-#         cursor.execute(query, params)
-    # ___________________________________________
 
     def dropdb(self, db_to_drop=None):
         """
