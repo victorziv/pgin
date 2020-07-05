@@ -1,6 +1,6 @@
 import os
 import sys
-import hashlib
+import uuid
 import importlib
 import click
 import re
@@ -126,12 +126,9 @@ def deploy_testing(project, dba, dbuser, dbname):
 # _____________________________________________
 
 
-def change_deployed(migration, change):
+def change_deployed(migration, changeid):
     dba = connect_dba(migration)
-    changeid = dba.fetch_deployed_changeid_by_name(change)
-    if changeid is not None:
-        return True
-    return False
+    return dba.fetch_change_deployed(changeid)
 # _____________________________________________
 
 
@@ -175,6 +172,7 @@ def create_pgin_metaschema(dba):
     dba.create_meta_schema()
     dba.create_plan_table()
     dba.create_changes_table()
+    dba.create_tags_table()
 # _____________________________________________
 
 
@@ -200,390 +198,6 @@ def change_entry_or_last(migration, name):
             change_ind = -1
 
     return lines, change_ind
-# _____________________________________________
-
-
-def plan_file_entries(migration):
-    '''
-    If passed change is None, the last line index is returned
-    '''
-    lines = []
-    with jsonlines.open(migration.plan) as reader:
-        for line in reader:
-            lines.append(line)
-    return lines
-# _____________________________________________
-
-
-def get_change_deploy(migration, dba, change):
-    changeid = get_changeid(change)
-    mod = importlib.import_module('%s.deploy.%s' % (migration.workdir, change))
-    deploy_cls = getattr(mod, change.capitalize())
-
-    deploy = deploy_cls(
-        project=migration.project,
-        project_user=migration.project_user,
-        conf=migration.conf,
-        conn=dba.conn,
-        logger=migration.logger
-    )
-
-    return deploy, changeid
-# _____________________________________________
-
-
-def get_changeid(change):
-    return hashlib.sha1(change.encode('utf-8')).hexdigest()
-# _____________________________________________
-
-
-def get_change_revert(migration, dba, change):
-    mod = importlib.import_module('%s.revert.%s' % (migration.workdir, change))
-    revert_cls = getattr(mod, change.capitalize())
-
-    revert = revert_cls(
-        project=migration.project,
-        project_user=migration.project_user,
-        conf=migration.conf,
-        conn=dba.conn,
-        logger=migration.logger
-    )
-
-    return revert
-# _____________________________________________
-
-
-def load_deploy_script(migration, dba, change):
-    mod = importlib.import_module('%s.deploy.%s' % (migration.workdir, change))
-    deploy_cls = getattr(mod, change.capitalize())
-
-    deploy = deploy_cls(
-        project=migration.project,
-        project_user=migration.project_user,
-        conf=migration.conf,
-        conn=dba.conn,
-        logger=migration.logger
-    )
-
-    return deploy
-# _____________________________________________
-
-
-def not_revert_if_false(ctx, param, value):
-    if not value:
-        click.echo("Nothing reverted")
-        ctx.exit()
-# _____________________________________________
-
-
-def not_remove_if_false(ctx, param, value):
-    if not value:
-        click.echo("Nothing removed")
-        ctx.exit()
-# _____________________________________________
-
-
-def remove_from_plan(migration, name):
-    lines, change_ind = change_entry_or_last(migration, name)
-    lines.pop(change_ind)
-    write_plan(migration, lines)
-# _____________________________________________
-
-
-def remove_script(migration, direction, change):
-    os.chdir(migration.home)
-    script_file = '%s.py' % change
-    script_path = '%s/%s' % (direction, script_file)
-    if os.path.exists(script_path):
-        click.echo("Removing script {}".format(script_path))
-        os.remove(script_path)
-# _____________________________________________
-
-
-def script_exists(migration, direction, script_name):
-
-    os.chdir(migration.home)
-    script_file = '%s.py' % script_name
-    script_path = '%s/%s' % (direction, script_file)
-    if os.path.exists(script_path):
-        click.echo("Script {} exists".format(script_path))
-        return True
-    return False
-# _____________________________________________
-
-
-def turn_to_python_package(path):
-    with open(os.path.join(path, '__init__.py'), 'w') as fw:
-        fw.write('')
-# _____________________________________________
-
-
-def plan_record_exists(dba, migration, change):
-    changeid = dba.fetch_planned_changeid_by_name(change)
-    if changeid is None:
-        return False
-    return True
-# _____________________________________________
-
-
-def populate_plan_table(migration, dba):
-    click.echo("Sync plan file into DB metaschema plan table")
-    changes = plan_file_entries(migration)
-    for change in changes:
-        change_name = change['name']
-        click.echo(message="+ {} {} ".format(change_name, '.' * (MSG_LENGTH - len(change_name))), nl=False)
-        changeid = get_changeid(change_name)
-        dba.apply_planned(changeid, change_name, change['msg'])
-        click.echo(click.style('ok', fg='green'))
-# _____________________________________________
-
-
-def set_tag(migration, tag, msg, change):
-    lines = []
-    with jsonlines.open(migration.plan) as reader:
-        tag_set = False
-        for line in reader:
-            if line['name'] == change:
-                line['tag'] = tag
-                line['tagmsg'] = msg
-                tag_set = True
-            lines.append(line)
-
-        if not tag_set:
-            last = lines[-1]
-            change = last['name']
-            last['tag'] = tag
-            last['tagmsg'] = msg
-
-    with jsonlines.open(migration.plan, mode='w') as writer:
-        for line in lines:
-            writer.write(line)
-
-    changeid = get_changeid(change)
-    dba = connect_dba(migration)
-    dba.apply_tag(changeid, tag, msg)
-
-    click.echo("Tag {} applied to change {}".format(tag, change))
-# _____________________________________________
-
-
-def write_plan(migration, lines):
-    with jsonlines.open(migration.plan, mode='w') as writer:
-        for line in lines:
-            writer.write(line)
-# _____________________________________________
-
-
-def validate_migration_home(ctx, param, value):
-    if value is None:
-        raise click.BadParameter('MIGRATION_HOME env variable has to be set to a valid path')
-
-    return value
-# _____________________________________________
-
-
-def validate_project(ctx, param, value):
-    if value is None:
-        raise click.BadParameter('PROJECT environment variable or --project command line parameter has to be set')
-
-    return value
-# _____________________________________________
-
-
-def validate_project_user(ctx, param, value):
-    if value is None:
-        raise click.BadParameter(
-            'PROJECT_USER environment variable  or --project_user command line parameter has to be set')
-
-    return value
-# _____________________________________________
-
-
-def update_plan(migration, name, msg):
-    with jsonlines.open(migration.plan, mode='a') as writer:
-        writer.write({
-            'name': name,
-            'msg': msg,
-        })
-# _____________________________________________
-
-
-def utc_to_local(utc_dt):
-    return utc_dt.replace(tzinfo=datetime.timezone.utc).astimezone(tz=None)
-
-# ============= Commands ==================
-
-
-@click.group()
-@click.option(
-    '--project',
-    envvar='PROJECT',
-    callback=validate_project,
-    help='Parent project name. Default: PROJECT env variable value'
-)
-@click.option(
-    '--project_user',
-    envvar='PROJECT_USER',
-    callback=validate_project_user,
-    help='Parent project generic user account. Default: PROJECT_USER env variable value'
-)
-@click.version_option(get_version())
-@click.pass_context
-def cli(ctx, project, project_user):
-    """
-    pgin is a command line tool for PostgreSQL DB migrations management.
-    Run with Python 3.6+.
-    Uses psycopg2 DB driver.
-    """
-    ctx.obj = Migration(project=project, project_user=project_user)
-# _____________________________________________
-
-
-@cli.command()
-@click.argument('change')
-@click.option('-m', '--msg', required=True, help="Short migration description")
-@pass_migration
-def add(migration, change, msg):
-    """
-    Adds migration script to the plan
-    """
-
-    os.chdir(migration.home)
-    dba = connect_dba(migration)
-    if plan_record_exists(dba, migration, change):
-        click.echo(message='Change {} already exists in migration plan'.format(change))
-        sys.exit(0)
-
-    update_plan(migration, change, msg)
-    changeid = get_changeid(change)
-    dba.apply_planned(changeid, change, msg)
-
-    for direction in ['deploy', 'revert']:
-        if not script_exists(migration, direction, change):
-            create_script(migration, direction, change)
-
-    click.echo("Change '{}' has been added".format(change))
-# _____________________________________________
-
-
-@cli.command()
-@click.option('--to')
-@pass_migration
-def deploy(migration, to=None):
-    """
-    Deploys pending changes
-    """
-
-    try:
-        dba = connect_dba(migration)
-        to, msg = figure_deploy_to_change(dba, migration, to)
-
-        click.echo(msg)
-
-        changes = plan_file_entries(migration)
-
-        for line in changes:
-            change = line['name']
-            deploy, changeid = get_change_deploy(migration, dba, change)
-
-            if change_deployed(migration, change):
-                continue
-
-            click.echo(message="+ {} {} ".format(change, '.' * (MSG_LENGTH - len(change))), nl=False)
-            deploy()
-            dba.apply_change(changeid, change)
-            if 'tag' in line:
-                dba.apply_tag(changeid, line['tag'], line['tagmsg'])
-
-            click.echo(click.style('ok', fg='green'))
-            if change == to:
-                break
-
-    except psycopg2.ProgrammingError as pe:
-        click.echo(click.style('fail', fg='red'))
-        click.echo("!!! Error in deploy: {}".format(pe))
-        logger.exception('Exception in deploy')
-    except Exception:
-        logger.exception('Exception in deploy')
-    finally:
-        disconnect_dba(dba)
-# _____________________________________________
-
-
-@cli.command()
-@click.option('--newdb', is_flag=True, required=False, help="If set to TRUE drops and re-creates existent DB")
-@pass_migration
-def init(migration, newdb=False):
-    """
-        Initiates the project DB migrations.
-    """
-
-    click.echo("Initiating project '{}' migrations".format(migration.project))
-    click.echo('Migration container path: {}'.format(migration.home))
-
-    create_directory(migration.home)
-    turn_to_python_package(migration.home)
-
-    if not os.path.exists(migration.plan):
-        logger.debug("Creating migration plan file: %r", migration.plan)
-        create_plan(migration.plan)
-
-    for d in ['deploy', 'revert']:
-        create_directory(os.path.join(migration.home, d))
-        click.echo("Created {}/".format(d))
-        turn_to_python_package(os.path.join(migration.home, d))
-
-    try:
-        dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
-        dba.revoke_connect_from_db()
-
-        if newdb:
-            sure = input("Sure to drop existing DB {}? (Yes/No) ".format(migration.project).lower())
-            if sure in ['y', 'yes']:
-                click.echo("Dropping DB {}".format(migration.project))
-                dba.dropdb()
-            else:
-                click.echo("DB {} will not be dropped".format(migration.project))
-
-        click.echo("Creating DB {} if not already exists".format(migration.project))
-        dba.createdb()
-        dba.grant_connect_to_db()
-        dba = connect_dba(migration)
-        create_pgin_metaschema(dba)
-        populate_plan_table(migration, dba)
-    finally:
-        disconnect_dba(dba)
-# _____________________________________________
-
-
-@cli.command()
-@click.option('-y', '--yes', is_flag=True, callback=not_remove_if_false, expose_value=False, prompt='Remove change?')
-@click.argument('change', required=True)
-@pass_migration
-def remove(migration, change):
-    """
-    Adds migration script to the plan
-    """
-
-    try:
-        dba = connect_dba(migration)
-        os.chdir(migration.home)
-        if not plan_record_exists(dba, migration, change):
-            click.echo("Change {} not found in migration plan".format(change))
-            sys.exit(0)
-
-        if change_deployed(migration, change):
-            click.echo("Cannot remove a deployed change {}. Revert first".format(change))
-            sys.exit(1)
-
-        click.echo("Removing change %s from migration plan" % change)
-        remove_from_plan(migration, change)
-        dba.remove_change_from_plan(change)
-    finally:
-        disconnect_dba(dba)
-
-    for direction in ['deploy', 'revert']:
-        remove_script(migration, direction, change)
 # _____________________________________________
 
 
@@ -662,8 +276,449 @@ def figure_revert_upto_change(dba, migration, upto):
 # _____________________________________________
 
 
+def get_change_deploy(migration, dba, name):
+    mod = importlib.import_module('%s.deploy.%s' % (migration.workdir, name))
+    deploy_cls = getattr(mod, name.capitalize())
+
+    deploy = deploy_cls(
+        project=migration.project,
+        project_user=migration.project_user,
+        conf=migration.conf,
+        conn=dba.conn,
+        logger=migration.logger
+    )
+
+    return deploy
+# _____________________________________________
+
+
+def generate_changeid():
+    return uuid.uuid4().hex
+# _____________________________________________
+
+
+def get_change_revert(migration, dba, change):
+    mod = importlib.import_module('%s.revert.%s' % (migration.workdir, change))
+    revert_cls = getattr(mod, change.capitalize())
+
+    revert = revert_cls(
+        project=migration.project,
+        project_user=migration.project_user,
+        conf=migration.conf,
+        conn=dba.conn,
+        logger=migration.logger
+    )
+
+    return revert
+# _____________________________________________
+
+
+def load_deploy_script(migration, dba, change):
+    mod = importlib.import_module('%s.deploy.%s' % (migration.workdir, change))
+    deploy_cls = getattr(mod, change.capitalize())
+
+    deploy = deploy_cls(
+        project=migration.project,
+        project_user=migration.project_user,
+        conf=migration.conf,
+        conn=dba.conn,
+        logger=migration.logger
+    )
+
+    return deploy
+# _____________________________________________
+
+
+def do_not_if_false(ctx, param, value):
+    if not value:
+        click.echo("Nothing done")
+        ctx.exit()
+# _____________________________________________
+
+
+def plan_file_entries(migration):
+    '''
+    If passed change is None, the last line index is returned
+    '''
+    lines = []
+    with jsonlines.open(migration.plan) as reader:
+        for line in reader:
+            lines.append(line)
+    return lines
+# _____________________________________________
+
+
+def remove_from_plan(migration, name):
+    lines, change_ind = change_entry_or_last(migration, name)
+    lines.pop(change_ind)
+    write_plan(migration, lines)
+# _____________________________________________
+
+
+def rename_in_plan(migration, changeid, old_name, new_name):
+    click.echo("Renaming in plan file: {} to {}".format(old_name, new_name))
+    lines = plan_file_entries(migration)
+    for ln in lines:
+        if uuid.UUID(ln['changeid']) == uuid.UUID(changeid):
+            ln['name'] = new_name
+            break
+    write_plan(migration, lines)
+# _____________________________________________
+
+
+def remove_script(migration, direction, name):
+    os.chdir(migration.home)
+    script_file = '{}.py'.format(name)
+    script_path = '{}/{}'.format(direction, script_file)
+    if os.path.exists(script_path):
+        click.echo("Removing script {}".format(script_path))
+        os.remove(script_path)
+# _____________________________________________
+
+
+def rename_script(migration, direction, old_name, new_name):
+    os.chdir(migration.home)
+    old_script_file = '{}.py'.format(old_name)
+    old_script_path = '{}/{}'.format(direction, old_script_file)
+
+    if os.path.exists(old_script_path):
+        new_script_file = '{}.py'.format(new_name)
+        new_script_path = '{}/{}'.format(direction, new_script_file)
+        click.echo("Renaming script {} to {}".format(old_script_path, new_script_path))
+        os.rename(old_script_path, new_script_path)
+# _____________________________________________
+
+
+def script_exists(migration, direction, script_name):
+
+    os.chdir(migration.home)
+    script_file = '%s.py' % script_name
+    script_path = '%s/%s' % (direction, script_file)
+    if os.path.exists(script_path):
+        click.echo("Script {} exists".format(script_path))
+        return True
+    return False
+# _____________________________________________
+
+
+def turn_to_python_package(path):
+    with open(os.path.join(path, '__init__.py'), 'w') as fw:
+        fw.write('')
+# _____________________________________________
+
+
+def plan_record_exists(dba, migration, name):
+    changeid = dba.fetch_planned_changeid_by_name(name)
+    return changeid
+# _____________________________________________
+
+
+def populate_plan_table(migration, dba):
+    click.echo("Sync plan file into DB metaschema plan table")
+    changes = plan_file_entries(migration)
+    for change in changes:
+        changeid = change['changeid']
+        name = change['name']
+
+        click.echo(message="+ {} {} ".format(name, '.' * (MSG_LENGTH - len(name))), nl=False)
+        dba.apply_planned(changeid, name, change['msg'])
+        click.echo(click.style('ok', fg='green'))
+# _____________________________________________
+
+
+def set_tag(migration, tag, msg, name):
+    lines = []
+    with jsonlines.open(migration.plan) as reader:
+        tag_set = False
+        for line in reader:
+            if line['name'] == name:
+                line['tag'] = tag
+                line['tagmsg'] = msg
+                tag_set = True
+            lines.append(line)
+
+        if not tag_set:
+            last = lines[-1]
+            change = last['name']
+            last['tag'] = tag
+            last['tagmsg'] = msg
+
+    with jsonlines.open(migration.plan, mode='w') as writer:
+        for line in lines:
+            writer.write(line)
+
+    dba = connect_dba(migration)
+    dba.apply_tag(line['changeid'], tag, msg)
+
+    click.echo("Tag {} applied to change {}".format(tag, change))
+# _____________________________________________
+
+
+def write_plan(migration, lines):
+    with jsonlines.open(migration.plan, mode='w') as writer:
+        for line in lines:
+            writer.write(line)
+# _____________________________________________
+
+
+def validate_migration_home(ctx, param, value):
+    if value is None:
+        raise click.BadParameter('MIGRATION_HOME env variable has to be set to a valid path')
+
+    return value
+# _____________________________________________
+
+
+def validate_project(ctx, param, value):
+    if value is None:
+        raise click.BadParameter('PROJECT environment variable or --project command line parameter has to be set')
+
+    return value
+# _____________________________________________
+
+
+def validate_project_user(ctx, param, value):
+    if value is None:
+        raise click.BadParameter(
+            'PROJECT_USER environment variable  or --project_user command line parameter has to be set')
+
+    return value
+# _____________________________________________
+
+
+def update_plan(migration, changeid, name, msg):
+    with jsonlines.open(migration.plan, mode='a') as writer:
+        writer.write({
+            'changeid': changeid,
+            'name': name,
+            'msg': msg,
+        })
+# _____________________________________________
+
+
+def utc_to_local(utc_dt):
+    return utc_dt.replace(tzinfo=datetime.timezone.utc).astimezone(tz=None)
+# _____________________________________________
+
+
+def upgrade_plan_file(migration):
+    changes = plan_file_entries(migration)
+    for change in changes:
+        change['changeid'] = generate_changeid()
+
+    write_plan(migration, changes)
+
+# ============= Commands ==================
+
+
+@click.group()
+@click.option(
+    '--project',
+    envvar='PROJECT',
+    callback=validate_project,
+    help='Parent project name. Default: PROJECT env variable value'
+)
+@click.option(
+    '--project_user',
+    envvar='PROJECT_USER',
+    callback=validate_project_user,
+    help='Parent project generic user account. Default: PROJECT_USER env variable value'
+)
+@click.version_option(get_version())
+@click.pass_context
+def cli(ctx, project, project_user):
+    """
+    pgin is a command line tool for PostgreSQL DB migrations management.
+    Run with Python 3.6+.
+    Uses psycopg2 DB driver.
+    """
+    ctx.obj = Migration(project=project, project_user=project_user)
+# _____________________________________________
+
+
 @cli.command()
-@click.option('-y', '--yes', is_flag=True, callback=not_revert_if_false, expose_value=False, prompt='Revert?')
+@click.argument('change')
+@click.option('-m', '--msg', required=True, help="Short migration description")
+@pass_migration
+def add(migration, name, msg):
+    """
+    Adds migration script to the plan
+    """
+
+    os.chdir(migration.home)
+    dba = connect_dba(migration)
+    changeid = dba.fetch_planned_changeid_by_name(name)
+    if changeid:
+        click.echo(message='Change {} already exists in migration plan'.format(name))
+        sys.exit(0)
+
+    changeid = generate_changeid()
+    update_plan(migration, changeid, name, msg)
+    dba.apply_planned(changeid, name, msg)
+
+    for direction in ['deploy', 'revert']:
+        if not script_exists(migration, direction, name):
+            create_script(migration, direction, name)
+
+    click.echo("Change '{}' has been added".format(name))
+# _____________________________________________
+
+
+@cli.command()
+@click.option('--to')
+@pass_migration
+def deploy(migration, to=None):
+    """
+    Deploys pending changes
+    """
+
+    try:
+        dba = connect_dba(migration)
+        to, msg = figure_deploy_to_change(dba, migration, to)
+
+        click.echo(msg)
+
+        changes = plan_file_entries(migration)
+
+        for line in changes:
+            changeid = line['changeid']
+            if change_deployed(migration, changeid):
+                continue
+
+            name = line['name']
+            deploy = get_change_deploy(migration, dba, name)
+
+            click.echo(message="+ {} {} ".format(name, '.' * (MSG_LENGTH - len(name))), nl=False)
+            deploy()
+            dba.apply_change(changeid, name)
+            if 'tag' in line:
+                dba.apply_tag(changeid, line['tag'], line['tagmsg'])
+
+            click.echo(click.style('ok', fg='green'))
+            if name == to:
+                break
+
+    except psycopg2.ProgrammingError as pe:
+        click.echo(click.style('fail', fg='red'))
+        click.echo("!!! Error in deploy: {}".format(pe))
+        logger.exception('Exception in deploy')
+    except Exception:
+        logger.exception('Exception in deploy')
+    finally:
+        disconnect_dba(dba)
+# _____________________________________________
+
+
+@cli.command()
+@click.option('--newdb', is_flag=True, required=False, help="If set to TRUE drops and re-creates existent DB")
+@pass_migration
+def init(migration, newdb=False):
+    """
+        Initiates the project DB migrations.
+    """
+
+    click.echo("Initiating project '{}' migrations".format(migration.project))
+    click.echo('Migration container path: {}'.format(migration.home))
+
+    create_directory(migration.home)
+    turn_to_python_package(migration.home)
+
+    if not os.path.exists(migration.plan):
+        logger.debug("Creating migration plan file: %r", migration.plan)
+        create_plan(migration.plan)
+
+    for d in ['deploy', 'revert']:
+        create_directory(os.path.join(migration.home, d))
+        click.echo("Created {}/".format(d))
+        turn_to_python_package(os.path.join(migration.home, d))
+
+    try:
+        dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
+        dba.revoke_connect_from_db()
+
+        if newdb:
+            sure = input("Sure to drop existing DB {}? (Yes/No) ".format(migration.project).lower())
+            if sure in ['y', 'yes']:
+                upgrade_plan_file(migration)
+                click.echo("Dropping DB {}".format(migration.project))
+                dba.dropdb()
+            else:
+                click.echo("DB {} will not be dropped".format(migration.project))
+
+        click.echo("Creating DB {} if not already exists".format(migration.project))
+        dba.createdb()
+        dba.grant_connect_to_db()
+        dba = connect_dba(migration)
+        create_pgin_metaschema(dba)
+        populate_plan_table(migration, dba)
+    finally:
+        disconnect_dba(dba)
+# _____________________________________________
+
+
+@cli.command()
+@click.option('-y', '--yes', is_flag=True, callback=do_not_if_false, expose_value=False, prompt='Remove change?')
+@click.argument('name', required=True)
+@pass_migration
+def remove(migration, name):
+    """
+    Adds migration script to the plan
+    """
+
+    try:
+        dba = connect_dba(migration)
+        os.chdir(migration.home)
+        changeid = plan_record_exists(dba, migration, name)
+        if not changeid:
+            click.echo("Change {} not found in migration plan".format(name))
+            sys.exit(0)
+
+        if change_deployed(migration, changeid):
+            click.echo("Cannot remove a deployed change {}. Revert first".format(name))
+            sys.exit(1)
+
+        click.echo("Removing change %s from migration plan" % name)
+        remove_from_plan(migration, changeid)
+        dba.remove_change_from_plan(changeid)
+    finally:
+        disconnect_dba(dba)
+
+    for direction in ['deploy', 'revert']:
+        remove_script(migration, direction, name)
+# _____________________________________________
+
+
+@cli.command()
+@click.option('-y', '--yes', is_flag=True, callback=do_not_if_false, expose_value=False, prompt='Rename change?')
+@click.argument('old_name', required=True)
+@click.argument('new_name', required=True)
+@pass_migration
+def rename(migration, old_name, new_name):
+    """
+    Rename change name
+    """
+
+    try:
+        dba = connect_dba(migration)
+        os.chdir(migration.home)
+        changeid = plan_record_exists(dba, migration, old_name)
+        if not changeid:
+            click.echo("Change {} not found in migration plan".format(old_name))
+            sys.exit(0)
+
+        click.echo("Renaming change {} to {}".format(old_name, new_name))
+        rename_in_plan(migration, changeid, old_name, new_name)
+        dba.rename_change_in_plan(changeid, new_name)
+    finally:
+        disconnect_dba(dba)
+
+    for direction in ['deploy', 'revert']:
+        rename_script(migration, direction, old_name, new_name)
+# _____________________________________________
+
+
+@cli.command()
+@click.option('-y', '--yes', is_flag=True, callback=do_not_if_false, expose_value=False, prompt='Revert?')
 @pass_migration
 @click.option('--to')
 def revert(migration, to=None):
@@ -720,7 +775,7 @@ def status(migration):
         lines = plan_file_entries(migration)
         undeployed = []
         for line in lines:
-            if not change_deployed(migration, line['name']):
+            if not change_deployed(migration, line['changeid']):
                 undeployed.append(line)
 
         if len(undeployed) == len(lines):
@@ -797,9 +852,8 @@ def tag_add(migration, tag, msg, change=None):
 
     write_plan(migration, lines)
 
-    changeid = get_changeid(change_line['name'])
     dba = connect_dba(migration)
-    dba.apply_tag(changeid, tag, msg)
+    dba.apply_tag(change_line['changeid'], tag, msg)
 
     click.echo(click.style("Tag '{}' was applied to change '{}'".format(tag, change_line['name']), fg='green'))
 # _____________________________________________
@@ -821,7 +875,7 @@ def tag_list(migration):
 
 
 @tag.command('remove')
-@click.option('-y', '--yes', is_flag=True, callback=not_remove_if_false, expose_value=False, prompt='Remove tag?')
+@click.option('-y', '--yes', is_flag=True, callback=do_not_if_false, expose_value=False, prompt='Remove tag?')
 @click.option('-t', '--tag', required=True)
 @pass_migration
 def tag_remove(migration, tag):
