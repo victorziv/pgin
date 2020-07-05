@@ -202,15 +202,78 @@ def change_entry_or_last(migration, name):
 # _____________________________________________
 
 
-def plan_file_entries(migration):
-    '''
-    If passed change is None, the last line index is returned
-    '''
-    lines = []
-    with jsonlines.open(migration.plan) as reader:
-        for line in reader:
-            lines.append(line)
-    return lines
+def figure_deploy_to_change(dba, migration, to):
+
+    if to is None:
+        msg = "Deploying all pending changes to '{}'".format(migration.project)
+        return to, msg
+
+    # Check 'to' is a tag
+    name = dba.fetch_change_by_tag(to)
+    if name:
+        msg = "Deploying pending changes from '{}'. Last tag to deploy: '{}'".format(
+            migration.project, to)
+        return name, msg
+
+    # 'to' is supposed to be a change name
+    if plan_record_exists(dba, migration, to):
+        msg = "Deploying pending changes from '{}'. Last change to deploy: '{}'".format(
+            migration.project, to)
+        return to, msg
+
+    click.echo(message="Change '{}' not found".format(to))
+    sys.exit(1)
+# _____________________________________________
+
+
+def figure_revert_upto_change(dba, migration, upto):
+    logger.debug("Revert upto: %r", upto)
+    pat1 = re.compile(r'^HEAD$')
+    pat2 = re.compile(r'^HEAD~(\d+)$')
+
+    if upto is None:
+        msg = "Reverting all deployed changes from '{}'".format(migration.project)
+        return upto, msg
+
+    # check upto is tag
+    name = dba.fetch_change_by_tag(upto)
+    if name:
+        msg = "Reverting deployed changes from '{}'. Last tag to revert: '{}'".format(
+            migration.project, upto)
+        return name, msg
+
+    # Figure out HEAD[~\d+] pattern passed
+    if pat1.match(upto):
+        # last change
+        change = dba.fetch_deployed_changes(limit=1)[0]
+        name = change['name']
+        msg = "Reverting deployed changes from '{}'. Last change to revert: '{}'".format(
+            migration.project, name)
+        return name, msg
+
+    match2 = pat2.match(upto)
+    if match2:
+        changes_back = match2.group(1)
+
+        # change with offset <changes_back>
+        try:
+            change = dba.fetch_deployed_changes(offset=int(changes_back), limit=1)[0]
+            name = change['name']
+            msg = "Reverting deployed changes from '{}'. Last change to revert: '{}'".format(
+                migration.project, name)
+        except IndexError:
+            msg = "Reverting all deployed changes from '{}'".format(migration.project)
+            name = None
+
+        return name, msg
+
+    if plan_record_exists(dba, migration, upto):
+        msg = "Reverting deployed changes from '{}'. Last change to revert: '{}'".format(
+            migration.project, upto)
+        return upto, msg
+
+    click.echo(message="Change '{}' not found".format(upto))
+    sys.exit(0)
 # _____________________________________________
 
 
@@ -229,10 +292,6 @@ def get_change_deploy(migration, dba, name):
     return deploy
 # _____________________________________________
 
-
-# def get_changeid(change):
-#     return hashlib.sha1(change.encode('utf-8')).hexdigest()
-# _____________________________________________
 
 def generate_changeid():
     return uuid.uuid4().hex
@@ -271,17 +330,22 @@ def load_deploy_script(migration, dba, change):
 # _____________________________________________
 
 
-def not_revert_if_false(ctx, param, value):
+def do_not_if_false(ctx, param, value):
     if not value:
-        click.echo("Nothing reverted")
+        click.echo("Nothing done")
         ctx.exit()
 # _____________________________________________
 
 
-def not_remove_if_false(ctx, param, value):
-    if not value:
-        click.echo("Nothing removed")
-        ctx.exit()
+def plan_file_entries(migration):
+    '''
+    If passed change is None, the last line index is returned
+    '''
+    lines = []
+    with jsonlines.open(migration.plan) as reader:
+        for line in reader:
+            lines.append(line)
+    return lines
 # _____________________________________________
 
 
@@ -292,13 +356,36 @@ def remove_from_plan(migration, name):
 # _____________________________________________
 
 
-def remove_script(migration, direction, change):
+def rename_in_plan(migration, changeid, new_name):
+    lines = plan_file_entries(migration)
+    for ln in lines:
+        if ln['changeid'] == changeid:
+            ln['name'] = new_name
+            break
+    write_plan(migration, lines)
+# _____________________________________________
+
+
+def remove_script(migration, direction, name):
     os.chdir(migration.home)
-    script_file = '%s.py' % change
-    script_path = '%s/%s' % (direction, script_file)
+    script_file = '{}.py'.format(name)
+    script_path = '{}/{}'.format(direction, script_file)
     if os.path.exists(script_path):
         click.echo("Removing script {}".format(script_path))
         os.remove(script_path)
+# _____________________________________________
+
+
+def rename_script(migration, direction, old_name, new_name):
+    os.chdir(migration.home)
+    old_script_file = '{}.py'.format(old_name)
+    old_script_path = '{}/{}'.format(direction, old_script_file)
+
+    if os.path.exists(old_script_path):
+        new_script_file = '{}.py'.format(new_name)
+        new_script_path = '{}/{}'.format(direction, new_script_file)
+        click.echo("Renaming script {} to {}".format(old_script_path, new_script_path))
+        os.rename(old_script_path, new_script_path)
 # _____________________________________________
 
 
@@ -411,6 +498,15 @@ def update_plan(migration, changeid, name, msg):
 
 def utc_to_local(utc_dt):
     return utc_dt.replace(tzinfo=datetime.timezone.utc).astimezone(tz=None)
+# _____________________________________________
+
+
+def upgrade_plan_file(migration):
+    changes = plan_file_entries(migration)
+    for change in changes:
+        change['changeid'] = generate_changeid()
+
+    write_plan(migration, changes)
 
 # ============= Commands ==================
 
@@ -561,7 +657,7 @@ def init(migration, newdb=False):
 
 
 @cli.command()
-@click.option('-y', '--yes', is_flag=True, callback=not_remove_if_false, expose_value=False, prompt='Remove change?')
+@click.option('-y', '--yes', is_flag=True, callback=do_not_if_false, expose_value=False, prompt='Remove change?')
 @click.argument('name', required=True)
 @pass_migration
 def remove(migration, name):
@@ -592,83 +688,37 @@ def remove(migration, name):
 # _____________________________________________
 
 
-def figure_deploy_to_change(dba, migration, to):
+@cli.command()
+@click.option('-y', '--yes', is_flag=True, callback=do_not_if_false, expose_value=False, prompt='Rename change?')
+@click.argument('old_name', required=True)
+@click.argument('new_name', required=True)
+@pass_migration
+def rename(migration, old_name, new_name):
+    """
+    Rename change name
+    """
 
-    if to is None:
-        msg = "Deploying all pending changes to '{}'".format(migration.project)
-        return to, msg
+    try:
+        dba = connect_dba(migration)
+        os.chdir(migration.home)
+        changeid = plan_record_exists(dba, migration, old_name)
+        if not changeid:
+            click.echo("Change {} not found in migration plan".format(old_name))
+            sys.exit(0)
 
-    # Check 'to' is a tag
-    name = dba.fetch_change_by_tag(to)
-    if name:
-        msg = "Deploying pending changes from '{}'. Last tag to deploy: '{}'".format(
-            migration.project, to)
-        return name, msg
+        click.echo("Renaming change {} to {}".format(old_name, new_name))
+        rename_in_plan(migration, changeid, new_name)
+        dba.rename_change_in_plan(changeid, new_name)
+    finally:
+        disconnect_dba(dba)
 
-    # 'to' is supposed to be a change name
-    if plan_record_exists(dba, migration, to):
-        msg = "Deploying pending changes from '{}'. Last change to deploy: '{}'".format(
-            migration.project, to)
-        return to, msg
-
-    click.echo(message="Change '{}' not found".format(to))
-    sys.exit(1)
-# _____________________________________________
-
-
-def figure_revert_upto_change(dba, migration, upto):
-    logger.debug("Revert upto: %r", upto)
-    pat1 = re.compile(r'^HEAD$')
-    pat2 = re.compile(r'^HEAD~(\d+)$')
-
-    if upto is None:
-        msg = "Reverting all deployed changes from '{}'".format(migration.project)
-        return upto, msg
-
-    # check upto is tag
-    name = dba.fetch_change_by_tag(upto)
-    if name:
-        msg = "Reverting deployed changes from '{}'. Last tag to revert: '{}'".format(
-            migration.project, upto)
-        return name, msg
-
-    # Figure out HEAD[~\d+] pattern passed
-    if pat1.match(upto):
-        # last change
-        change = dba.fetch_deployed_changes(limit=1)[0]
-        name = change['name']
-        msg = "Reverting deployed changes from '{}'. Last change to revert: '{}'".format(
-            migration.project, name)
-        return name, msg
-
-    match2 = pat2.match(upto)
-    if match2:
-        changes_back = match2.group(1)
-
-        # change with offset <changes_back>
-        try:
-            change = dba.fetch_deployed_changes(offset=int(changes_back), limit=1)[0]
-            name = change['name']
-            msg = "Reverting deployed changes from '{}'. Last change to revert: '{}'".format(
-                migration.project, name)
-        except IndexError:
-            msg = "Reverting all deployed changes from '{}'".format(migration.project)
-            name = None
-
-        return name, msg
-
-    if plan_record_exists(dba, migration, upto):
-        msg = "Reverting deployed changes from '{}'. Last change to revert: '{}'".format(
-            migration.project, upto)
-        return upto, msg
-
-    click.echo(message="Change '{}' not found".format(upto))
-    sys.exit(0)
+    for direction in ['deploy', 'revert']:
+        rename_script(migration, direction, old_name, new_name)
 # _____________________________________________
 
 
 @cli.command()
-@click.option('-y', '--yes', is_flag=True, callback=not_revert_if_false, expose_value=False, prompt='Revert?')
+@click.option('-y', '--yes', is_flag=True, callback=do_not_if_false, expose_value=False, prompt='Revert?')
 @pass_migration
 @click.option('--to')
 def revert(migration, to=None):
@@ -809,15 +859,6 @@ def tag_add(migration, tag, msg, change=None):
 # _____________________________________________
 
 
-def upgrade_plan_file(migration):
-    changes = plan_file_entries(migration)
-    for change in changes:
-        change['changeid'] = generate_changeid()
-
-    write_plan(migration, changes)
-# _____________________________________________
-
-
 @tag.command('list')
 @pass_migration
 def tag_list(migration):
@@ -834,7 +875,7 @@ def tag_list(migration):
 
 
 @tag.command('remove')
-@click.option('-y', '--yes', is_flag=True, callback=not_remove_if_false, expose_value=False, prompt='Remove tag?')
+@click.option('-y', '--yes', is_flag=True, callback=do_not_if_false, expose_value=False, prompt='Remove tag?')
 @click.option('-t', '--tag', required=True)
 @pass_migration
 def tag_remove(migration, tag):

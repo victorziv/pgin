@@ -417,6 +417,18 @@ class DBAdmin:
         self.conn.commit()
     # _____________________________
 
+    def rename_change_in_plan(self, changeid, new_name):
+        query = """
+            UPDATE %s.plan
+            SET name = %s
+            WHERE changeid = %s
+        """
+        params = [AsIs(self.meta_schema), new_name, changeid]
+
+        self.cursor.execute(query, params)
+        self.conn.commit()
+    # _____________________________
+
     def revoke_connect_from_db(self, dbname=None, dbuser=None):
         conn = None
         cursor = None
