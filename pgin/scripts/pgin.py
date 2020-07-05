@@ -1,6 +1,5 @@
 import os
 import sys
-# import hashlib
 import uuid
 import importlib
 import click
@@ -356,10 +355,11 @@ def remove_from_plan(migration, name):
 # _____________________________________________
 
 
-def rename_in_plan(migration, changeid, new_name):
+def rename_in_plan(migration, changeid, old_name, new_name):
+    click.echo("Renaming in plan file: {} to {}".format(old_name, new_name))
     lines = plan_file_entries(migration)
     for ln in lines:
-        if ln['changeid'] == changeid:
+        if uuid.UUID(ln['changeid']) == uuid.UUID(changeid):
             ln['name'] = new_name
             break
     write_plan(migration, lines)
@@ -407,8 +407,8 @@ def turn_to_python_package(path):
 # _____________________________________________
 
 
-def plan_record_exists(dba, migration, change):
-    changeid = dba.fetch_planned_changeid_by_name(change)
+def plan_record_exists(dba, migration, name):
+    changeid = dba.fetch_planned_changeid_by_name(name)
     return changeid
 # _____________________________________________
 
@@ -707,7 +707,7 @@ def rename(migration, old_name, new_name):
             sys.exit(0)
 
         click.echo("Renaming change {} to {}".format(old_name, new_name))
-        rename_in_plan(migration, changeid, new_name)
+        rename_in_plan(migration, changeid, old_name, new_name)
         dba.rename_change_in_plan(changeid, new_name)
     finally:
         disconnect_dba(dba)

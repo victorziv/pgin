@@ -117,9 +117,9 @@ class DBAdmin:
         query = """
            CREATE TABLE IF NOT EXISTS %(meta_schema)s.changes (
                changeid uuid PRIMARY KEY,
-               name VARCHAR(256) UNIQUE REFERENCES %(meta_schema)s.plan(name),
+               name VARCHAR(256) UNIQUE REFERENCES %(meta_schema)s.plan(name) ON UPDATE CASCADE,
                applied TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL,
-               FOREIGN KEY(changeid) REFERENCES %(meta_schema)s.plan(changeid) ON UPDATE CASCADE
+               FOREIGN KEY(changeid) REFERENCES %(meta_schema)s.plan(changeid)
            )
         """
         params = {'meta_schema': AsIs(self.meta_schema)}
