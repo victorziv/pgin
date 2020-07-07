@@ -537,7 +537,7 @@ def cli(ctx, project, project_user):
 
 
 @cli.command()
-@click.argument('change')
+@click.argument('name')
 @click.option('-m', '--msg', required=True, help="Short migration description")
 @pass_migration
 def add(migration, name, msg):
