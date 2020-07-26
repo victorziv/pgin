@@ -13,7 +13,7 @@ class DBAdmin:
         self.logger = logging.getLogger(conf['PROJECT'])
         self.dbname = dbname
         self.dbuser = dbuser
-        self.meta_schema = 'pgin'
+        self.meta_schema = 'pgin%s' % dbname
         self.dburi = Config.db_connection_uri(dbname=dbname, dbuser=dbuser)
     # __________________________________________
 
