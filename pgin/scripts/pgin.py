@@ -75,7 +75,7 @@ class Migration(object):
         self.logger = logger
         self.conf = conf
         self.workdir = 'migration'
-        self.home = os.path.abspath(os.path.join(conf['ROOTDIR'], project, self.workdir))
+        self.home = os.path.abspath(os.path.join(conf['PROJECT_DIR'], self.workdir))
         self.plan_name = 'plan.jsonl'
         self.plan = os.path.join(self.home, self.plan_name)
         self.project = project
@@ -623,6 +623,7 @@ def init(migration, newdb=False):
     create_directory(migration.home)
     turn_to_python_package(migration.home)
 
+    print('migration plan: {}'.format(migration.plan))
     if not os.path.exists(migration.plan):
         logger.debug("Creating migration plan file: %r", migration.plan)
         create_plan(migration.plan)
