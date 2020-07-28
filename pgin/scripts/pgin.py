@@ -163,7 +163,6 @@ def connect_dba(migration):
     dburi = Config.db_connection_uri(migration.project, migration.project_user)
     dba.conn = dba.connectdb(dburi)
     dba.cursor = dba.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-#     dba.set_search_path(schema=migration.project)
     dba.set_search_path(schema=conf.get('DBSCHEMA', migration.project))
     return dba
 # _____________________________________________
