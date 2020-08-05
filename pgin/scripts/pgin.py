@@ -341,9 +341,10 @@ def plan_file_entries(migration):
     If passed change is None, the last line index is returned
     '''
     lines = []
-    with jsonlines.open(migration.plan) as reader:
-        for line in reader:
-            lines.append(line)
+    fp = open(migration.plan)
+    reader = jsonlines.Reader(fp)
+    for line in reader.iter(type=dict, skip_empty=True):
+        lines.append(line)
     return lines
 # _____________________________________________
 
