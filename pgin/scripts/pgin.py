@@ -603,8 +603,12 @@ def deploy(migration, to=None):
         click.echo(click.style('fail', fg='red'))
         click.echo("!!! Error in deploy: {}".format(pe))
         logger.exception('Exception in deploy')
+        sys.exit(1)
     except Exception:
         logger.exception('Exception in deploy')
+        sys.exit(1)
+    else:
+        sys.exit(0)
     finally:
         disconnect_dba(dba)
 # _____________________________________________
