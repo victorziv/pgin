@@ -336,19 +336,6 @@ def do_not_if_false(ctx, param, value):
 # _____________________________________________
 
 
-# def plan_file_entries(migration):
-#     '''
-#     If passed change is None, the last line index is returned
-#     '''
-#     lines = []
-#     with jsonlines.open(migration.plan) as reader:
-#         for line in reader:
-#             if not line:
-#                 continue
-#             lines.append(line)
-#     return lines
-# _____________________________________________
-
 def plan_file_entries(migration):
     '''
     If passed change is None, the last line index is returned
