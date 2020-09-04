@@ -55,15 +55,11 @@ class MutuallyExclusiveOption(click.Option):
 
 class Migration(object):
 
-    def __init__(self, project, project_user):
-        self.logger = logger
-        self.workdir = 'migration'
-        projectdir = get_project_dir()
-        self.home = os.path.abspath(os.path.join(project_dir, self.workdir))
+    def __init__(self):
+#         self.workdir = 'migration'
+#         self.home = os.path.abspath(os.path.join(project_dir, self.workdir))
         self.plan_name = 'plan.jsonl'
-        self.plan = os.path.join(self.home, self.plan_name)
-        self.project = project
-        self.project_user = project_user
+#         self.plan = os.path.join(self.home, self.plan_name)
         pgindir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
         self.template_dir = os.path.join(pgindir, 'templates')
         self.template_env = Environment(loader=FileSystemLoader(self.template_dir))
@@ -497,27 +493,15 @@ def upgrade_plan_file(migration):
 
 
 @click.group()
-@click.option(
-    '--project',
-    envvar='PROJECT',
-    callback=validate_project,
-    help='Parent project name. Default: PROJECT env variable value'
-)
-@click.option(
-    '--project_user',
-    envvar='PROJECT_USER',
-    callback=validate_project_user,
-    help='Parent project generic user account. Default: PROJECT_USER env variable value'
-)
 @click.version_option(get_version())
 @click.pass_context
-def cli(ctx, project, project_user):
+def cli(ctx):
     """
     pgin is a command line tool for PostgreSQL DB migrations management.
     Run with Python 3.6+.
     Uses psycopg2 DB driver.
     """
-    ctx.obj = Migration(project=project, project_user=project_user)
+    ctx.obj = Migration()
 # _____________________________________________
 
 
@@ -600,14 +584,27 @@ def deploy(migration, to=None):
 
 @cli.command()
 @click.option('--newdb', is_flag=True, required=False, help="If set to TRUE drops and re-creates existent DB")
+@click.option(
+    '-p',
+    '--project',
+    envvar='PROJECT',
+    callback=validate_project,
+    help='Parent project name. If not provided, PROJECT env variable value will be used.'
+)
+@click.option(
+    '--project_user',
+    envvar='PROJECT_USER',
+    callback=validate_project_user,
+    help='Parent project generic user account. If not provided, PROJECT_USER env variable value will be used'
+)
 @pass_migration
-def init(migration, newdb=False):
+def init(migration, project, project_user, newdb=False):
     """
         Initiates the project DB migrations.
     """
 
-    click.echo("Initiating project '{}' migrations".format(migration.project))
-    click.echo('Migration container path: {}'.format(migration.home))
+#     click.echo("Initiating project '{}' migrations".format(migration.project))
+#     click.echo('Migration container path: {}'.format(migration.home))
 
     create_directory(migration.home)
     turn_to_python_package(migration.home)
