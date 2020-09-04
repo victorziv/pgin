@@ -10,23 +10,7 @@ import psycopg2.extras
 import datetime
 from jinja2 import Environment, FileSystemLoader
 from tabulate import tabulate
-from config import Config, Configurator
 # =================================================
-
-runtype = os.getenv('CONFIG_ENV')
-if runtype is None:
-    print("ERROR: $CONFIG_ENV environment variable is not set")
-    sys.exit(1)
-
-conf = Configurator.configure(config_type=runtype)
-
-from lib import applogging  # noqa 
-execid = 'pgin'
-logger = applogging.set_logger(
-    logger_name=execid,
-    logpath=os.path.join(conf['LOGDIR'], '%s.log' % execid),
-    log_to_console=True
-)
 
 from pgin.lib.helpers import create_directory  # noqa
 from pgin.dba import DBAdmin  # noqa
