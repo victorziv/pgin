@@ -11,8 +11,6 @@ def read_version():
     return version
 # ______________________________
 
-#     py_modules=[APP],
-
 
 setup(
     name=APP,
@@ -31,7 +29,8 @@ setup(
         'click',
         'jsonlines',
         'colorama',
-        'tabulate'
+        'tabulate',
+        'flake8'
     ],
     include_package_data=True,
     python_requires='>=3.6',
