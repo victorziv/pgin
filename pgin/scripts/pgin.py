@@ -57,9 +57,9 @@ class Migration(object):
 
     def __init__(self, project, project_user):
         self.logger = logger
-        self.conf = conf
         self.workdir = 'migration'
-        self.home = os.path.abspath(os.path.join(conf['PROJECT_DIR'], self.workdir))
+        projectdir = get_project_dir()
+        self.home = os.path.abspath(os.path.join(project_dir, self.workdir))
         self.plan_name = 'plan.jsonl'
         self.plan = os.path.join(self.home, self.plan_name)
         self.project = project
