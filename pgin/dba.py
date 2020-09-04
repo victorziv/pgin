@@ -2,19 +2,18 @@ import logging
 import datetime
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT, AsIs
-from config import Config
 # ==============================================================
 
 
 class DBAdmin:
 
-    def __init__(self, conf, dbname, dbuser):
-        self.conf = conf
-        self.logger = logging.getLogger(conf['PROJECT'])
+    def __init__(self, dbname, dbuser):
+        execid = 'pgin'
+        self.logger = logging.getLogger(execid)
         self.dbname = dbname
         self.dbuser = dbuser
         self.meta_schema = 'pgin%s' % dbname
-        self.dburi = Config.db_connection_uri(dbname=dbname, dbuser=dbuser)
+        self.dburi = db_connection_uri(dbname=dbname, dbuser=dbuser)
     # __________________________________________
 
     def apply_change(self, changeid, change):
@@ -81,7 +80,7 @@ class DBAdmin:
         self.logger.debug("Creating DB %s with owner %s", newdb, newdb_owner)
 
         try:
-            admin_db_uri = Config.db_connection_uri_admin(dbuser=newdb_owner)
+            admin_db_uri = db_connection_uri_admin(dbuser=newdb_owner)
             self.logger.debug("Admin DB URI: %r", admin_db_uri)
             admin_conn = self.connectdb(admin_db_uri)
             admin_cursor = admin_conn.cursor()
@@ -187,7 +186,7 @@ class DBAdmin:
         self.logger.info("Dropping DB %s", db_to_drop)
 
         try:
-            admin_db_uri = Config.db_connection_uri_admin(dbuser=self.dbuser)
+            admin_db_uri = db_connection_uri_admin(dbuser=self.dbuser)
             self.logger.debug("Admin DB URI: %r", admin_db_uri)
             admin_conn = self.connectdb(admin_db_uri)
             admin_cursor = admin_conn.cursor()
@@ -338,7 +337,7 @@ class DBAdmin:
             dbuser = self.dbuser
 
         try:
-            dburi = Config.db_connection_uri(dbname, dbuser)
+            dburi = db_connection_uri(dbname, dbuser)
             conn = self.connectdb(dburi)
             cursor = conn.cursor()
             conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
@@ -439,7 +438,7 @@ class DBAdmin:
             dbuser = self.dbuser
 
         try:
-            dburi = Config.db_connection_uri(dbname, dbuser)
+            dburi = db_connection_uri(dbname, dbuser)
             conn = self.connectdb(dburi)
             cursor = conn.cursor()
             conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
