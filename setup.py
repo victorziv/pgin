@@ -31,7 +31,8 @@ setup(
         'click',
         'jsonlines',
         'colorama',
-        'tabulate'
+        'tabulate',
+        'toml'
     ],
     include_package_data=True,
     python_requires='>=3.6',
