@@ -83,7 +83,7 @@ def deploy_testing(project, dba, dbuser, dbname):
 
     try:
         migration = Migration(project=project, project_user=dbuser)
-        dburi = Config.db_connection_uri(dbname=dbname, dbuser=dbuser)
+        dburi = db_connection_uri(dbname=dbname, dbuser=dbuser)
         dba.conn = dba.connectdb(dburi)
         dba.cursor = dba.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         dba.set_search_path(schema=project)
