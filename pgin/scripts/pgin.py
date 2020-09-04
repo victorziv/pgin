@@ -10,6 +10,7 @@ import psycopg2.extras
 import datetime
 from jinja2 import Environment, FileSystemLoader
 from tabulate import tabulate
+import toml
 # =================================================
 
 from pgin.lib.helpers import create_directory  # noqa
@@ -24,6 +25,16 @@ def get_version():
         version = fp.read()
 
     return version.strip()
+# _____________________________________________
+
+
+def write_config(conf):
+    rootdir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+    conf_file = os.path.join(rootdir, 'pgin.conf')
+    with open(conf_file, 'w') as wf:
+        toml.dump(conf, wf)
+# _____________________________________________
+
 # =====================================
 
 
@@ -582,6 +593,7 @@ def deploy(migration, to=None):
 # _____________________________________________
 
 
+
 @cli.command()
 @click.option('--newdb', is_flag=True, required=False, help="If set to TRUE drops and re-creates existent DB")
 @click.option(
@@ -606,6 +618,7 @@ def init(migration, project, project_user, newdb=False):
 #     click.echo("Initiating project '{}' migrations".format(migration.project))
 #     click.echo('Migration container path: {}'.format(migration.home))
 
+    create_config(project, project_user)
     create_directory(migration.home)
     turn_to_python_package(migration.home)
 
