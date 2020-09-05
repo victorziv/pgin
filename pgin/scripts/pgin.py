@@ -18,7 +18,7 @@ from pgin.dba import DBAdmin  # noqa
 MSG_LENGTH = 60
 
 # TODO: might be a subject of configuration later on
-MIGRATION_DIR = 'migration'
+MIGRATION_DIR = 'dbmigration'
 PLAN_FILE = 'plan.json'
 DEPLOY_DIR = 'deploy'
 REVERT_DIR = 'revert'
@@ -28,8 +28,8 @@ CONF_FILE = 'pgin.conf'
 
 
 def create_containers(conf):
-    plan = conf['core']['plan']
-    home = conf['core']['home']
+    plan = conf['plan']
+    home = conf['home']
     if not os.path.exists(plan):
         create_plan(plan)
         click.echo("Created {}".format(plan))
@@ -53,56 +53,53 @@ def get_version():
 # _____________________________________________
 
 
-def init_config(project, project_user, project_topdir):
-    home = os.path.join(project_topdir, MIGRATION_DIR)
+def init_config(pgin_project, dbuser, topdir):
+    home = os.path.join(topdir, MIGRATION_DIR, pgin_project)
+
     create_directory(home)
     click.echo("Created {}".format(home))
     turn_to_python_package(home)
 
     conf = {
-        'core': {
-            'project': project,
-            'topdir': project_topdir,
-            'home': home,
-            'project_user': project_user,
-            'migration_container': MIGRATION_DIR,
-            'plan_file': PLAN_FILE,
-            'plan': os.path.join(project_topdir, MIGRATION_DIR, PLAN_FILE)
+        'project': pgin_project,
+        'topdir': topdir,
+        'home': home,
+        'dbuser': dbuser,
+        'migration_container': MIGRATION_DIR,
+        'plan_file': PLAN_FILE,
+        'plan': os.path.join(home, PLAN_FILE)
 
-        },
-
-        'committer': {
-        }
     }
     conf_file = os.path.join(home, CONF_FILE)
     with open(conf_file, 'w') as wf:
         toml.dump(conf, wf)
+    os.environ["PGIN_CONF"] = conf_file
 
-    click.echo("Created {}".format(CONF_FILE))
+    click.echo("Created {}".format(conf_file))
     return create_containers(conf)
 # _____________________________________________
 
 
 def init_db(conf, newdb):
 
-    project = conf['core']['project']
-    project_user = conf['core']['project_user']
-    plan = conf['core']['plan']
+    dbname = conf['project']
+    dbuser = conf['dbuser']
+    plan = conf['plan']
 
     try:
-        dba = DBAdmin(dbname=project, dbuser=project_user)
+        dba = DBAdmin(dbname=dbname, dbuser=dbuser)
         dba.revoke_connect_from_db()
 
         if newdb:
-            sure = input("Sure to drop existing DB {}? (Yes/No) ".format(project).lower())
+            sure = input("Sure to drop existing DB {}? (Yes/No) ".format(dbname).lower())
             if sure in ['y', 'yes']:
                 upgrade_plan_file(plan)
-                click.echo("Dropping DB {}".format(project))
+                click.echo("Dropping DB {}".format(dbname))
                 dba.dropdb()
             else:
-                click.echo("DB {} will not be dropped".format(project))
+                click.echo("DB {} will not be dropped".format(dbname))
 
-        click.echo("Creating DB {} if not already exists".format(project))
+        click.echo("Creating DB {} if not already exists".format(dbname))
         dba.createdb()
         dba.grant_connect_to_db()
         dba = connect_dba(migration)
@@ -544,10 +541,9 @@ def validate_project(ctx, param, value):
 # _____________________________________________
 
 
-def validate_project_user(ctx, param, value):
+def validate_pgin_user(ctx, param, value):
     if value is None:
-        raise click.BadParameter(
-            'PROJECT_USER environment variable  or --project_user command line parameter has to be set')
+        raise click.BadParameter('--pgin_user command line parameter or PGIN_USER environment variable has to be set')
 
     return value
 # _____________________________________________
@@ -681,31 +677,31 @@ def deploy(migration, to=None):
 @click.option(
     '-p',
     '--project',
-    envvar='PROJECT',
+    envvar='PGIN_PROJECT',
     callback=validate_project,
-    help='Parent project name. If not provided, PROJECT env variable value will be used.'
+    help='Pgin project / DB name. If not provided, PGIN_PROJECT env variable value will be used.'
 )
 @click.option(
     '-u',
-    '--project_user',
-    envvar='PROJECT_USER',
-    callback=validate_project_user,
-    help='Parent project generic user account. If not provided, PROJECT_USER env variable value will be used'
+    '--dbuser',
+    envvar='PGIN_USER',
+    callback=validate_pgin_user,
+    help='Pgin DB user. If not provided, PGIN_USER env variable value will be used'
 )
 @click.option(
     '-d',
-    '--project_topdir',
-    envvar='PROJECT_TOPDIR',
+    '--topdir',
+    envvar='PGIN_TOPDIR',
     callback=validate_project_topdir,
-    help='Parent project top directory. If not provided, PROJECT_TOPDIR env variable value will be used'
+    help='Pgin project top directory. If not provided, PGIN_TOPDIR env variable value will be used'
 )
 @click.option('--newdb', is_flag=True, required=False, help="If set to TRUE drops and re-creates existent DB")
-def init(project, project_user, project_topdir, newdb=False):
+def init(project, dbuser, topdir, newdb=False):
     """
         Initiates the project DB migrations.
     """
 
-    conf = init_config(project, project_user, project_topdir)
+    conf = init_config(project, dbuser, topdir)
     init_db(conf, newdb)
 # _____________________________________________
 
