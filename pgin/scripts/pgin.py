@@ -23,6 +23,7 @@ PLAN_FILE = 'plan.json'
 DEPLOY_DIR = 'deploy'
 REVERT_DIR = 'revert'
 CONF_FILE = 'pgin.conf'
+CONF_PATH_FILE = '.pgin_confpath'
 # /TODO: might be a subject of configuration later on
 # _____________________________________________
 
@@ -71,6 +72,7 @@ def init_config(pgin_project, dbuser, topdir):
 
     }
     conf_file = os.path.join(home, CONF_FILE)
+    save_conf_path(conf_file)
     with open(conf_file, 'w') as wf:
         toml.dump(conf, wf)
     os.environ["PGIN_CONF"] = conf_file
@@ -484,6 +486,13 @@ def populate_plan_table(dba, plan):
         click.echo(message="+ {} {} ".format(name, '.' * (MSG_LENGTH - len(name))), nl=False)
         dba.apply_planned(changeid, name, change['msg'])
         click.echo(click.style('ok', fg='green'))
+# _____________________________________________
+
+
+def save_conf_path(conf_path):
+    rootdir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+    with open(os.path.join(rootdir, CONF_PATH_FILE), 'w') as cp:
+        cp.write(conf_path)
 # _____________________________________________
 
 
