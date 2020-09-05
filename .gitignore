@@ -44,3 +44,5 @@ pip-log.txt
 doc/static/
 doc/_modules/
 doc/_sources/
+
+.pgin*
