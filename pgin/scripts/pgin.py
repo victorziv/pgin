@@ -604,6 +604,7 @@ def deploy(migration, to=None):
     help='Parent project name. If not provided, PROJECT env variable value will be used.'
 )
 @click.option(
+    '-u',
     '--project_user',
     envvar='PROJECT_USER',
     callback=validate_project_user,
@@ -618,7 +619,11 @@ def init(migration, project, project_user, newdb=False):
 #     click.echo("Initiating project '{}' migrations".format(migration.project))
 #     click.echo('Migration container path: {}'.format(migration.home))
 
-    create_config(project, project_user)
+    conf = {
+        'project': project,
+        'project_user': project_user,
+    }
+    write_config(conf)
     create_directory(migration.home)
     turn_to_python_package(migration.home)
 
