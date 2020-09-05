@@ -10,11 +10,37 @@ import psycopg2.extras
 import datetime
 from jinja2 import Environment, FileSystemLoader
 from tabulate import tabulate
+import toml
 # =================================================
 
 from pgin.lib.helpers import create_directory  # noqa
 from pgin.dba import DBAdmin  # noqa
 MSG_LENGTH = 60
+
+# TODO: might be a subject of configuration later on
+MIGRATION_DIR = 'migration'
+PLAN_FILE = 'plan.json'
+DEPLOY_DIR = 'deploy'
+REVERT_DIR = 'revert'
+CONF_FILE = 'pgin.conf'
+# /TODO: might be a subject of configuration later on
+# _____________________________________________
+
+
+def create_containers(conf):
+    plan = conf['core']['plan']
+    home = conf['core']['home']
+    if not os.path.exists(plan):
+        create_plan(plan)
+        click.echo("Created {}".format(plan))
+
+    for d in [DEPLOY_DIR, REVERT_DIR]:
+        migration_dir = os.path.join(home, d)
+        create_directory(migration_dir)
+        click.echo("Created {}/".format(migration_dir))
+        turn_to_python_package(migration_dir)
+
+    return conf
 # _____________________________________________
 
 
@@ -24,6 +50,66 @@ def get_version():
         version = fp.read()
 
     return version.strip()
+# _____________________________________________
+
+
+def init_config(project, project_user, project_topdir):
+    home = os.path.join(project_topdir, MIGRATION_DIR)
+    create_directory(home)
+    click.echo("Created {}".format(home))
+    turn_to_python_package(home)
+
+    conf = {
+        'core': {
+            'project': project,
+            'topdir': project_topdir,
+            'home': home,
+            'project_user': project_user,
+            'migration_container': MIGRATION_DIR,
+            'plan_file': PLAN_FILE,
+            'plan': os.path.join(project_topdir, MIGRATION_DIR, PLAN_FILE)
+
+        },
+
+        'committer': {
+        }
+    }
+    conf_file = os.path.join(home, CONF_FILE)
+    with open(conf_file, 'w') as wf:
+        toml.dump(conf, wf)
+
+    click.echo("Created {}".format(CONF_FILE))
+    return create_containers(conf)
+# _____________________________________________
+
+
+def init_db(conf, newdb):
+
+    project = conf['core']['project']
+    project_user = conf['core']['project_user']
+    plan = conf['core']['plan']
+
+    try:
+        dba = DBAdmin(dbname=project, dbuser=project_user)
+        dba.revoke_connect_from_db()
+
+        if newdb:
+            sure = input("Sure to drop existing DB {}? (Yes/No) ".format(project).lower())
+            if sure in ['y', 'yes']:
+                upgrade_plan_file(plan)
+                click.echo("Dropping DB {}".format(project))
+                dba.dropdb()
+            else:
+                click.echo("DB {} will not be dropped".format(project))
+
+        click.echo("Creating DB {} if not already exists".format(project))
+        dba.createdb()
+        dba.grant_connect_to_db()
+        dba = connect_dba(migration)
+        create_pgin_metaschema(dba)
+        populate_plan_table(migration, dba)
+    finally:
+        disconnect_dba(dba)
 # =====================================
 
 
@@ -55,15 +141,11 @@ class MutuallyExclusiveOption(click.Option):
 
 class Migration(object):
 
-    def __init__(self, project, project_user):
-        self.logger = logger
-        self.workdir = 'migration'
-        projectdir = get_project_dir()
-        self.home = os.path.abspath(os.path.join(project_dir, self.workdir))
+    def __init__(self):
+#         self.workdir = 'migration'
+#         self.home = os.path.abspath(os.path.join(project_dir, self.workdir))
         self.plan_name = 'plan.jsonl'
-        self.plan = os.path.join(self.home, self.plan_name)
-        self.project = project
-        self.project_user = project_user
+#         self.plan = os.path.join(self.home, self.plan_name)
         pgindir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
         self.template_dir = os.path.join(pgindir, 'templates')
         self.template_env = Environment(loader=FileSystemLoader(self.template_dir))
@@ -320,12 +402,12 @@ def do_not_if_false(ctx, param, value):
 # _____________________________________________
 
 
-def plan_file_entries(migration):
+def plan_file_entries(plan):
     '''
     If passed change is None, the last line index is returned
     '''
     lines = []
-    fp = open(migration.plan)
+    fp = open(plan)
     reader = jsonlines.Reader(fp)
     for line in reader.iter(type=dict, skip_empty=True):
         lines.append(line)
@@ -342,7 +424,7 @@ def remove_from_plan(migration, name):
 
 def rename_in_plan(migration, changeid, old_name, new_name):
     click.echo("Renaming in plan file: {} to {}".format(old_name, new_name))
-    lines = plan_file_entries(migration)
+    lines = plan_file_entries(plan)
     for ln in lines:
         if uuid.UUID(ln['changeid']) == uuid.UUID(changeid):
             ln['name'] = new_name
@@ -400,7 +482,7 @@ def plan_record_exists(dba, migration, name):
 
 def populate_plan_table(migration, dba):
     click.echo("Sync plan file into DB metaschema plan table")
-    changes = plan_file_entries(migration)
+    changes = plan_file_entries(plan)
     for change in changes:
         changeid = change['changeid']
         name = change['name']
@@ -471,6 +553,15 @@ def validate_project_user(ctx, param, value):
 # _____________________________________________
 
 
+def validate_project_topdir(ctx, param, value):
+    if value is None:
+        raise click.BadParameter(
+            'PROJECT_DIR environment variable  or --project_dir command line parameter has to be set')
+
+    return value
+# _____________________________________________
+
+
 def update_plan(migration, changeid, name, msg):
     with jsonlines.open(migration.plan, mode='a') as writer:
         writer.write({
@@ -486,38 +577,26 @@ def utc_to_local(utc_dt):
 # _____________________________________________
 
 
-def upgrade_plan_file(migration):
-    changes = plan_file_entries(migration)
+def upgrade_plan_file(plan):
+    changes = plan_file_entries(plan)
     for change in changes:
         change['changeid'] = generate_changeid()
 
-    write_plan(migration, changes)
+    write_plan(plan, changes)
 
 # ============= Commands ==================
 
 
 @click.group()
-@click.option(
-    '--project',
-    envvar='PROJECT',
-    callback=validate_project,
-    help='Parent project name. Default: PROJECT env variable value'
-)
-@click.option(
-    '--project_user',
-    envvar='PROJECT_USER',
-    callback=validate_project_user,
-    help='Parent project generic user account. Default: PROJECT_USER env variable value'
-)
 @click.version_option(get_version())
 @click.pass_context
-def cli(ctx, project, project_user):
+def cli(ctx):
     """
     pgin is a command line tool for PostgreSQL DB migrations management.
     Run with Python 3.6+.
     Uses psycopg2 DB driver.
     """
-    ctx.obj = Migration(project=project, project_user=project_user)
+    ctx.obj = Migration()
 # _____________________________________________
 
 
@@ -563,7 +642,7 @@ def deploy(migration, to=None):
 
         click.echo(msg)
 
-        changes = plan_file_entries(migration)
+        changes = plan_file_entries(conf)
 
         for line in changes:
             changeid = line['changeid']
@@ -599,50 +678,35 @@ def deploy(migration, to=None):
 
 
 @cli.command()
+@click.option(
+    '-p',
+    '--project',
+    envvar='PROJECT',
+    callback=validate_project,
+    help='Parent project name. If not provided, PROJECT env variable value will be used.'
+)
+@click.option(
+    '-u',
+    '--project_user',
+    envvar='PROJECT_USER',
+    callback=validate_project_user,
+    help='Parent project generic user account. If not provided, PROJECT_USER env variable value will be used'
+)
+@click.option(
+    '-d',
+    '--project_topdir',
+    envvar='PROJECT_TOPDIR',
+    callback=validate_project_topdir,
+    help='Parent project top directory. If not provided, PROJECT_TOPDIR env variable value will be used'
+)
 @click.option('--newdb', is_flag=True, required=False, help="If set to TRUE drops and re-creates existent DB")
-@pass_migration
-def init(migration, newdb=False):
+def init(project, project_user, project_topdir, newdb=False):
     """
         Initiates the project DB migrations.
     """
 
-    click.echo("Initiating project '{}' migrations".format(migration.project))
-    click.echo('Migration container path: {}'.format(migration.home))
-
-    create_directory(migration.home)
-    turn_to_python_package(migration.home)
-
-    print('migration plan: {}'.format(migration.plan))
-    if not os.path.exists(migration.plan):
-        logger.debug("Creating migration plan file: %r", migration.plan)
-        create_plan(migration.plan)
-
-    for d in ['deploy', 'revert']:
-        create_directory(os.path.join(migration.home, d))
-        click.echo("Created {}/".format(d))
-        turn_to_python_package(os.path.join(migration.home, d))
-
-    try:
-        dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
-        dba.revoke_connect_from_db()
-
-        if newdb:
-            sure = input("Sure to drop existing DB {}? (Yes/No) ".format(migration.project).lower())
-            if sure in ['y', 'yes']:
-                upgrade_plan_file(migration)
-                click.echo("Dropping DB {}".format(migration.project))
-                dba.dropdb()
-            else:
-                click.echo("DB {} will not be dropped".format(migration.project))
-
-        click.echo("Creating DB {} if not already exists".format(migration.project))
-        dba.createdb()
-        dba.grant_connect_to_db()
-        dba = connect_dba(migration)
-        create_pgin_metaschema(dba)
-        populate_plan_table(migration, dba)
-    finally:
-        disconnect_dba(dba)
+    conf = init_config(project, project_user, project_topdir)
+    init_db(conf, newdb)
 # _____________________________________________
 
 
