@@ -7,13 +7,21 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT, AsIs
 
 class DBAdmin:
 
+    DBHOST = 'localhost'
+    DBPORT = 5432
+    # _____________________________
+
     def __init__(self, dbname, dbuser):
         execid = 'pgin'
         self.logger = logging.getLogger(execid)
         self.dbname = dbname
         self.dbuser = dbuser
-        self.meta_schema = 'pgin%s' % dbname
-        self.dburi = db_connection_uri(dbname=dbname, dbuser=dbuser)
+        self.meta_schema = 'pgin_%s' % dbname
+
+        self.db_uri_tmpl = 'postgresql://{dbuser}@{dbhost}:{dbport}/{dbname}'
+        self.dburi_admin = self.db_uri_tmpl.format(
+            dbuser=dbuser, dbhost=self.DBHOST, dbport=self.DBPORT, dbname='template1')
+        self.dburi = self.db_uri_tmpl.format(dbuser=dbuser, dbhost=self.DBHOST, dbport=self.DBPORT, dbname=dbname)
     # __________________________________________
 
     def apply_change(self, changeid, change):
@@ -67,28 +75,17 @@ class DBAdmin:
         self.conn.commit()
     # _____________________________
 
-    def createdb(self, newdb=None, newdb_owner=None):
-        """
-        """
-
-        if newdb is None:
-            newdb = self.dbname
-
-        if newdb_owner is None:
-            newdb_owner = self.dbuser
-
-        self.logger.debug("Creating DB %s with owner %s", newdb, newdb_owner)
+    def createdb(self):
+        self.logger.debug("Creating DB %s with owner %s", self.dbname, self.dbuser)
 
         try:
-            admin_db_uri = db_connection_uri_admin(dbuser=newdb_owner)
-            self.logger.debug("Admin DB URI: %r", admin_db_uri)
-            admin_conn = self.connectdb(admin_db_uri)
+            admin_conn = self.connectdb(self.dburi_admin)
             admin_cursor = admin_conn.cursor()
             admin_conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
 
             # Create DB
             query = """CREATE DATABASE %(dbname)s WITH OWNER %(user)s"""
-            params = {'dbname': AsIs(newdb), 'user': AsIs(newdb_owner)}
+            params = {'dbname': AsIs(self.dbname), 'user': AsIs(self.dbuser)}
             admin_cursor.execute(query, params)
 
         except psycopg2.ProgrammingError as pe:
@@ -158,9 +155,7 @@ class DBAdmin:
         self.conn.commit()
     # _____________________________
 
-    def connectdb(self, dburi=None):
-        if dburi is None:
-            dburi = self.dburi
+    def connectdb(self, dburi):
         return psycopg2.connect(dburi)
     # ___________________________
 
@@ -186,9 +181,7 @@ class DBAdmin:
         self.logger.info("Dropping DB %s", db_to_drop)
 
         try:
-            admin_db_uri = db_connection_uri_admin(dbuser=self.dbuser)
-            self.logger.debug("Admin DB URI: %r", admin_db_uri)
-            admin_conn = self.connectdb(admin_db_uri)
+            admin_conn = self.connectdb(self.dburi_admin)
             admin_cursor = admin_conn.cursor()
             admin_conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
 
@@ -329,22 +322,15 @@ class DBAdmin:
         return [dict(f) for f in fetch]
     # ___________________________
 
-    def grant_connect_to_db(self, dbname=None, dbuser=None):
-        if dbname is None:
-            dbname = self.dbname
-
-        if dbuser is None:
-            dbuser = self.dbuser
-
+    def grant_connect_to_db(self):
         try:
-            dburi = db_connection_uri(dbname, dbuser)
-            conn = self.connectdb(dburi)
+            conn = self.connectdb(self.dburi_admin)
             cursor = conn.cursor()
             conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
             query = """
                 GRANT CONNECT ON DATABASE %s TO %s
             """
-            params = (AsIs(dbname), AsIs(dbuser))
+            params = (AsIs(self.dbname), AsIs(self.dbuser))
             cursor.execute(query, params)
         finally:
             cursor.close()
@@ -428,18 +414,12 @@ class DBAdmin:
         self.conn.commit()
     # _____________________________
 
-    def revoke_connect_from_db(self, dbname=None, dbuser=None):
+    def revoke_connect_from_db(self):
         conn = None
         cursor = None
-        if dbname is None:
-            dbname = self.dbname
-
-        if dbuser is None:
-            dbuser = self.dbuser
 
         try:
-            dburi = db_connection_uri(dbname, dbuser)
-            conn = self.connectdb(dburi)
+            conn = self.connectdb(self.dburi_admin)
             cursor = conn.cursor()
             conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
 
@@ -449,7 +429,7 @@ class DBAdmin:
                 WHERE pg_stat_activity.datname = %s
                 AND pid <> pg_backend_pid();
             """
-            params = (dbname, )
+            params = [self.dbname]
             cursor.execute(query, params)
             conn.commit()
         except psycopg2.OperationalError as e:

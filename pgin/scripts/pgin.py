@@ -102,9 +102,9 @@ def init_db(conf, newdb):
         click.echo("Creating DB {} if not already exists".format(dbname))
         dba.createdb()
         dba.grant_connect_to_db()
-        dba = connect_dba(migration)
+        dba = connect_dba(dbname=dbname, dbuser=dbuser)
         create_pgin_metaschema(dba)
-        populate_plan_table(migration, dba)
+        populate_plan_table(dba, plan)
     finally:
         disconnect_dba(dba)
 # =====================================
@@ -139,10 +139,6 @@ class MutuallyExclusiveOption(click.Option):
 class Migration(object):
 
     def __init__(self):
-#         self.workdir = 'migration'
-#         self.home = os.path.abspath(os.path.join(project_dir, self.workdir))
-        self.plan_name = 'plan.jsonl'
-#         self.plan = os.path.join(self.home, self.plan_name)
         pgindir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
         self.template_dir = os.path.join(pgindir, 'templates')
         self.template_env = Environment(loader=FileSystemLoader(self.template_dir))
@@ -155,37 +151,37 @@ pass_migration = click.make_pass_decorator(Migration)
 # _____________________________________________
 
 
-def deploy_testing(project, dba, dbuser, dbname):
-    """
-    Deploys all changes into testing DB
-    """
+# def deploy_testing(project, dba, dbuser, dbname):
+#     """
+#     Deploys all changes into testing DB
+#     """
 
-    try:
-        migration = Migration(project=project, project_user=dbuser)
-        dburi = db_connection_uri(dbname=dbname, dbuser=dbuser)
-        dba.conn = dba.connectdb(dburi)
-        dba.cursor = dba.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        dba.set_search_path(schema=project)
-        dba.show_search_path()
+#     try:
+#         migration = Migration(project=project, project_user=dbuser)
+#         dburi = db_connection_uri(dbname=dbname, dbuser=dbuser)
+#         dba.conn = dba.connectdb(dburi)
+#         dba.cursor = dba.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+#         dba.set_search_path(schema=project)
+#         dba.show_search_path()
 
-        changes = plan_file_entries(migration)
+#         changes = plan_file_entries(migration)
 
-        for line in changes:
-            change = line['name']
-            deploy = load_deploy_script(migration, dba, change)
+#         for line in changes:
+#             change = line['name']
+#             deploy = load_deploy_script(migration, dba, change)
 
-            click.echo(message="+ {} {} ".format(change, '.' * (MSG_LENGTH - len(change))), nl=False)
-            deploy()
-            click.echo(click.style('ok', fg='green'))
+#             click.echo(message="+ {} {} ".format(change, '.' * (MSG_LENGTH - len(change))), nl=False)
+#             deploy()
+#             click.echo(click.style('ok', fg='green'))
 
-    except psycopg2.ProgrammingError as pe:
-        click.echo(click.style('fail', fg='red'))
-        click.echo("!!! Error in deploy: {}".format(pe))
-        logger.exception('Exception in deploy')
-    except Exception:
-        logger.exception('Exception in deploy')
-    finally:
-        disconnect_dba(dba)
+#     except psycopg2.ProgrammingError as pe:
+#         click.echo(click.style('fail', fg='red'))
+#         click.echo("!!! Error in deploy: {}".format(pe))
+#         logger.exception('Exception in deploy')
+#     except Exception:
+#         logger.exception('Exception in deploy')
+#     finally:
+#         disconnect_dba(dba)
 # _____________________________________________
 
 
@@ -221,12 +217,13 @@ def create_plan(plan):
 # _____________________________________________
 
 
-def connect_dba(migration):
-    dba = DBAdmin(conf=conf, dbname=migration.project, dbuser=migration.project_user)
-    dburi = Config.db_connection_uri(migration.project, migration.project_user)
-    dba.conn = dba.connectdb(dburi)
+def connect_dba(dbname, dbuser, dbschema=None):
+    dba = DBAdmin(dbname=dbname, dbuser=dbuser)
+    dba.conn = dba.connectdb(dba.dburi)
     dba.cursor = dba.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    dba.set_search_path(schema=conf.get('DBSCHEMA', migration.project))
+    if dbschema is None:
+        dbschema = dbname
+    dba.set_search_path(schema=dbschema)
     return dba
 # _____________________________________________
 
@@ -477,7 +474,7 @@ def plan_record_exists(dba, migration, name):
 # _____________________________________________
 
 
-def populate_plan_table(migration, dba):
+def populate_plan_table(dba, plan):
     click.echo("Sync plan file into DB metaschema plan table")
     changes = plan_file_entries(plan)
     for change in changes:
